@@ -1,4 +1,4 @@
-# OneVoice_AIChallenge
+# OneVoice_AIChallenge: Vân Ngữ
 
 ### Offline Vietnamese ↔ Mandarin Edge AI Translator for Industrial Workplaces
 
