@@ -1,274 +1,282 @@
 # Vân Ngữ — Technical Deep-Dive
 
-**Three engineering artifacts for the Qualcomm submission**
-1. A defensible latency budget on a concrete Snapdragon tier
-2. The context-engine design (tag substitution + constrained decoding)
-3. The evaluation protocol, including the safety-set methodology
+## System Overview
+Vân Ngữ is an end-to-end, on-device Edge-AI communication platform that performs speech recognition, language identification, machine translation and speech synthesis entirely on Snapdragon-powered hardware, using Qualcomm AI Hub optimised models. No speech, text or user data is transmitted to external servers during operation.
+The architecture is a modular streaming pipeline. Each stage is independently optimised for latency, memory and inference performance, and the work is deliberately distributed across the device’s heterogeneous compute: the always-on audio front-end runs on the Hexagon audio DSP, the AI models run on the Hexagon NPU, and control and routing run on the CPU. Two design principles run throughout: the pipeline streams (it does not wait for a complete recording before acting), and safety-critical communication is gated rather than assumed correct.
+```mermaid
+flowchart TD
+    A["Microphone array (2-4 MEMS)"] --> B["Beamforming + VAD + light noise control<br/>(Hexagon audio DSP)"]
+    B --> C["Streaming multilingual ASR<br/>+ integrated language ID (NPU)"]
+    C --> D{"Phrase memory match?"}
+    D -->|"hit (high confidence)"| E["Cached translation / cached audio"]
+    D -->|"miss / low confidence"| F["Tag substitution<br/>(glossary terms -> sentinels)"]
+    F --> G["Lightweight NMT (NPU)"]
+    G --> H["Constrained decode<br/>for mandated wording"]
+    H --> I["Glossary restore"]
+    E --> J{"Safety fail-safe<br/>placeholder + confidence check"}
+    I --> J
+    J -->|"pass"| K["Streaming TTS + neural vocoder (NPU)"]
+    J -->|"fail"| L["Request repeat / safe fallback"]
+    K --> M["Speaker / headset"]
+    L --> A
+```
+---
 
-A note on numbers: hardware capabilities (TOPS, model sizes) below are from Qualcomm's published material. Per-stage **latencies are engineering estimates** derived from model size, architecture, and the chip's compute/bandwidth budget. Every one is flagged with what determines it and how to confirm it by profiling on the real device through Qualcomm AI Hub Workbench (which runs on cloud-hosted physical QCS8550 hardware). Do not present the estimates as measured results — present the *method* and the *measured* number you get back.
+### 1. Audio Processing Layer
+Speech is captured by a small MEMS microphone array (two to four elements) rather than a single microphone. The array is what makes directional rejection of machine noise possible: with multiple elements the system can apply spatial filtering — delay-and-sum beamforming as a baseline, and an adaptive (MVDR-type) beamformer to steer towards the speaker and suppress directional noise sources. Inter-element spacing is chosen relative to the highest frequency of interest to avoid spatial aliasing. (A single-microphone variant remains possible for cost-reduced units, but it cannot perform beamforming and would rely on single-channel suppression only.)
+The front-end runs on the always-on, low-power Hexagon audio DSP and performs:
+Voice Activity Detection (a small neural VAD trained on industrial noise, since energy-threshold VAD fails against non-stationary, impulsive machine noise).
+Noise control and audio normalisation.
+Acoustic echo cancellation where an open speaker is used (omitted for closed headsets).
+End-of-speech detection.
+Design choice — the recognition path is decoupled from aggressive enhancement. The ASR model receives VAD-gated, lightly processed audio and is trained on noisy and augmented factory speech for robustness. Heavy denoising is reserved for any human-audible monitoring output, because strong enhancement introduces artefacts that a recogniser trained on clean audio has never seen and that can raise recognition error. Gating inference to active speech also avoids wasted computation and power during silence.
+Latency note. The trailing-silence wait used to declare end-of-speech (roughly 300–500 ms) is a dominant, hardware-independent component of overall latency and is budgeted as such.
+
+
+### 2. Automatic Speech Recognition (ASR)
+The gated audio stream is recognised by a single multilingual streaming ASR model covering Vietnamese and Mandarin. A streaming architecture (a chunked Conformer or an RNN-T transducer with bounded right-context) is used deliberately in place of non-streaming transcription models that consume a fixed multi-second window: the streaming model emits tokens during speech, so at end-of-speech only a short final chunk remains to process. This is the difference between a transcription tool and a real-time communication device.
+Integrated language identification. Because the model is multilingual, it self-identifies the spoken language and tags its output. This removes the need for a separate post-recognition language-detection stage and, importantly, handles the intra-sentence code-switching that factory staff use routinely. A near-free script-level check (Han characters versus Latin-with-diacritics) provides a confirming sanity check.
+Tonal-language handling. Both languages are tonal (Mandarin: four tones plus neutral; Northern Vietnamese: six). Tone is carried in the low-frequency pitch contour, which is fragile under both aggressive denoising and low-bit quantisation. The system therefore uses quantisation-aware training rather than naive post-training quantisation, tunes the front-end to preserve harmonic structure, and measures tone-confusion error explicitly (Section 7) rather than hiding it inside an aggregate error rate.
+Models are deployed via Qualcomm AI Hub and executed on the Hexagon NPU. Example output: “Máy ép đang bị kẹt.” / “压机卡住了。”
+
+### 3. Language Identification and Routing
+Language routing is handled inline by the multilingual ASR described above rather than as a separate model: the recognised language tag selects the translation direction (Vietnamese → Mandarin or Mandarin → Vietnamese) automatically, with no manual switching. For code-switched utterances, routing is applied per span rather than per whole utterance, so a sentence that mixes the two languages is translated coherently. This restructuring removes the ambiguity of the original design, in which language was detected only after recognition and therefore could not have influenced which recogniser ran.
+
+### 4. Phrase Memory
+Industrial communication is highly repetitive, so before invoking the translation model the system checks a local phrase memory of frequently used commands (for example: stop the production line; check machine number three; wear a safety helmet; emergency shutdown). On a match, the stored translation — and optionally a cached audio clip — is returned immediately, bypassing neural translation and sharply reducing latency.
+Robust matching. Exact string matching is too brittle, because the recogniser will phrase the same command slightly differently from one utterance to the next. Matching therefore uses normalised edit distance or embedding similarity against a threshold.
+Safety gating. The match threshold is treated as a safety parameter, not a convenience setting. A fuzzy false-positive could return a confident but wrong safety instruction — for instance collapsing “do not switch off” into “switch off”. Below a confidence margin the system does not guess: it falls through to full translation or asks the speaker to repeat. Negation and antonym near-misses are explicitly guarded and tested (Section 7).
+
+### 5. Context-Aware Translation Engine
+For sentences not held in phrase memory, a lightweight Neural Machine Translation model translates with industrial terminology guaranteed by mechanism rather than corrected after the fact. Two complementary mechanisms are used:
+Tag substitution (default). Glossary terms — machine names, line identifiers, SOP codes, PPE, equipment — are detected with a per-factory gazetteer and replaced with typed placeholder tokens that pass through translation untouched, then restored in the target language. This is deterministic, adds almost no latency, and guarantees that a machine number or SOP code is never mistranslated. It is unusually reliable for this language pair because both Vietnamese and Mandarin are morphologically light, so a restored term drops cleanly into the target sentence.
+Lexically-constrained decoding (mandated wording). For safety phrases that must use one official target wording, a bounded-beam constraint forces that exact phrase into the output. This is reserved for the small mandated set, since it adds search overhead.
+The translation model is fine-tuned to handle the placeholder tokens, and a placeholder-count check acts as a fail-safe: if the tokens going in do not match those coming out, the output is rejected and the system falls back to a safe rendering or a request to repeat. Context is supplied to translation during inference (machine names, line identifiers, safety terminology, SOPs and company vocabulary), producing accurate and consistent industrial communication.
+
+### 6. Text-to-Speech (TTS)
+The translated sentence is synthesised by a lightweight acoustic model paired with a quantised neural (GAN-type) vocoder. The vocoder choice matters: a non-autoregressive vocoder produces an audio chunk in one pass, giving a short time-to-first-sample, and synthesis streams so that playback begins before the whole utterance is generated. What the worker perceives is the time to first audio, which is what the system optimises.
+Frequently used safety announcements are played from locally cached audio for near-instant delivery. Output is delivered through a Bluetooth headset, a bone-conduction headset, or an integrated speaker.
+Edge AI Runtime
+All models execute locally using Qualcomm AI Hub optimised models and Snapdragon acceleration. Responsibilities are mapped across the device’s heterogeneous compute as follows:
+
+Footprint. All models are quantised; peak co-resident footprint is on the order of 150–250 MB, well within device memory. The autoregressive decode stages (ASR, NMT, TTS) are memory-bandwidth-bound rather than compute-bound, so the optimisation levers are quantisation and short output sequences (including phrase-memory hits) rather than raw compute throughput.
+No speech, text or user data is transmitted to external servers.
+Performance Objectives
+Fully offline inference.
+Real-Time Factor below 1.0 and latency reported separately. RTF measures whether the system keeps up with the audio stream; latency measures responsiveness. The two are distinct and both are reported.
+Time from end-of-speech to first translated audio below approximately two seconds for short operational commands, with the phrase-memory path noticeably faster.
+Latency reported as p50 / p95 / p99, since a single mean hides the longer-sentence tail.
+Low memory footprint through quantised models, and energy-efficient operation through offloading the always-on front-end to the audio DSP.
+
+### Scalability
+The modular pipeline supports additional languages and industries without redesign. Two points govern how it scales:
+Language growth. Pairwise translation grows with the square of the number of languages. Beyond the initial pair, the system moves to a single many-to-many multilingual translation model (trading a larger footprint for linear scaling) rather than adding a separate model per direction.
+Deployment across factories. Terminology is delivered as per-factory glossary and phrase-memory packs — versioned configuration pushed to the device — with over-the-air updates of those packs and of the quantised models, and hardware tiers mapped to Snapdragon SKUs. This configuration plane, not the inference pipeline alone, is what makes the product deployable at fleet scale.
+Planned extensions include Vietnamese ↔ English and Vietnamese ↔ Korean, multi-speaker conversations and speaker identification, and OCR- and camera-assisted contextual understanding.
 
 ---
 
-## Part 1 — Latency Budget
+# Additional Diagrams, References & Source Parts
+## Diagram 2 — Hardware compute allocation
 
-### 1.1 Target tier
+Work is split across the device's heterogeneous compute. The key correction versus the original proposal: the always-on front-end lives on the **Hexagon audio DSP**, not the CPU.
 
-Primary target: **Qualcomm Dragonwing QCS8550** (the IoT/industrial sibling of Snapdragon 8 Gen 2, and a supported AI Hub chipset).
+```mermaid
+flowchart LR
+    subgraph DSP["Hexagon audio DSP - always on, low power"]
+        d1["Beamforming"]
+        d2["Voice Activity Detection"]
+        d3["Noise control"]
+        d4["Feature extraction"]
+    end
+    subgraph NPU["Hexagon NPU / HTP - 48 INT8 TOPS"]
+        n1["Streaming ASR + language ID"]
+        n2["Neural Machine Translation"]
+        n3["TTS acoustic model + neural vocoder"]
+    end
+    subgraph CPU["Kryo CPU"]
+        c1["Device control + UI"]
+        c2["Audio routing"]
+        c3["Glossary / gazetteer lookup"]
+        c4["Phrase-memory matching"]
+        c5["End-of-speech logic"]
+    end
+    subgraph MEM["Storage + Memory"]
+        m1["Quantized models (~150-250 MB)"]
+        m2["Industrial knowledge base"]
+        m3["Config / glossary packs"]
+        m4["Audio + inference buffers"]
+    end
+    DSP --> NPU
+    CPU --> DSP
+    CPU --> NPU
+    MEM --- NPU
+    MEM --- CPU
+```
 
-| Block | Spec | Why it matters here |
-|---|---|---|
-| NPU (Hexagon HTP, V73) | 48 TOPS INT8 / 12 TOPS FP16, with HVX (vector) + HMX (matrix) | Runs ASR/NMT/TTS inference |
-| **Dedicated Hexagon audio DSP** + Sensing Hub 3.0 | always-on, low-power | This is where VAD, denoise, feature extraction belong — **not** the CPU |
-| CPU (Kryo) | 1×Cortex-X3 @3.2 GHz, 2×A715 + 2×A710, 3×A510 | Control, routing, glossary/phrase lookup, endpointing logic |
-| Memory | LPDDR5X | Multi-GB; RAM capacity is **not** your bottleneck on this tier |
+---
 
-Lower-power wearable tier (for the hardware-tier scaling story): **QCS6490** — fewer TOPS, tighter memory, where model footprint and stage-swapping actually start to bite. Design for QCS8550, validate degradation on QCS6490.
+## Diagram 3 — Audio front-end signal chain
 
-The single most important platform signal you can send a Qualcomm jury: **put the always-on audio front-end on the Hexagon audio DSP, the heavy inference on the HTP, and control on the CPU.** Your current architecture table burns CPU on glossary lookup and never mentions the audio DSP at all.
+Shows the single most important front-end fix: the **ASR path receives only light processing** (and is trained on noisy audio), while aggressive enhancement is a *separate* branch reserved for human-audible output. Feeding heavily denoised audio into the recogniser is what raises error.
 
-### 1.2 The metric you must not conflate
+```mermaid
+flowchart TD
+    A["Mic array"] --> B["Beamformer (delay-sum / MVDR)"]
+    B --> C["Neural VAD (factory-noise trained)"]
+    C --> D{"Speech active?"}
+    D -->|"no"| E["Gate closed - skip inference"]
+    D -->|"yes"| F["Light processing + normalization"]
+    F --> G["Feature extraction (log-mel)"]
+    G --> H["ASR (noise-augmented training)"]
+    B --> I["Aggressive enhancement"]
+    I --> J["Human-audible monitoring (optional only)"]
+```
 
-Two different quantities, repeatedly confused in voice-AI proposals:
+---
 
-- **Real-Time Factor (RTF)** = compute time / audio duration. A *throughput* measure. RTF < 1 means you can keep up with a live stream. It says nothing about responsiveness.
-- **Latency** = wall-clock from end-of-speech to first synthesized audio sample. This is what a worker *feels*.
+## Diagram 4 — Phrase memory with safety gate
 
-You can have RTF = 0.4 and still feel sluggish, because latency is dominated by things RTF doesn't capture: the endpoint silence wait, autoregressive decode length, and vocoder time-to-first-sample. **Report both, separately.** Claiming "RTF < 1.0" as evidence of low latency is the single easiest thing for a reviewer to puncture.
+The match threshold is treated as a **safety parameter**. In the ambiguous margin the system refuses to guess on safety-critical commands and asks for a repeat, rather than risk a confident inversion.
 
-### 1.3 The Whisper trap (architecture drives the budget)
+```mermaid
+flowchart TD
+    A["ASR text + language tag"] --> B["Normalize"]
+    B --> C["Fuzzy match vs phrase memory<br/>(edit distance / embedding)"]
+    C --> D{"Match score?"}
+    D -->|">= high threshold"| E["Return cached translation / audio"]
+    D -->|"in uncertainty margin"| F{"Safety-critical command?"}
+    D -->|"below threshold"| G["Send to translation engine"]
+    F -->|"yes"| H["Do NOT guess -> request repeat"]
+    F -->|"no"| G
+    E --> J["Safety fail-safe check"]
+    G --> J
+```
 
-Qualcomm's AI Hub Whisper-Base is published with: encoder 23.7M params / 90.7 MB float, decoder 48.9M params / 187 MB float, **fixed input 80 × 3000 = exactly 30 s of audio**, max decode 200 tokens.
+---
 
-That fixed 30 s window is the trap. A Whisper encoder processes 3000 mel frames **regardless of whether the worker said "stop" (0.5 s) or a full sentence (4 s)**. You pay the full encoder cost on every utterance. For short factory commands this is catastrophic for latency.
+## Diagram 5 — Context engine (tag substitution + constrained decoding)
 
-Two ways out, and you should name which you choose:
+Worked example for "Kiểm tra máy số 3" → "检查3号机". The machine id is masked before translation and restored after, so it can never be mistranslated. A placeholder-count mismatch triggers rejection.
 
-- **(A) Streaming ASR** — a chunked Conformer (CTC or RNN-T transducer) with bounded right-context. It emits tokens *during* speech, so at end-of-speech only the final chunk remains. This is the right answer for command-and-control latency. Whisper is a transcription model, not a streaming model; don't let the AI Hub catalog entry decide your architecture for you.
-- **(B) Keep Whisper-Tiny but window-trim** — gate with VAD so the encoder only ever sees the active segment padded to a small fixed length (e.g. 5 s), not 30 s. Cheaper, but still non-streaming, so the whole encoder fires only *after* end-of-speech.
+```mermaid
+flowchart TD
+    A["Source: Kiem tra may so 3"] --> B["Gazetteer (Aho-Corasick) detects 'may so 3'"]
+    B --> C["Mask -> Kiem tra <MACHINE_03>"]
+    C --> D["NMT translate (sentinel passes through)"]
+    D --> E["Constrained decode for mandated terms"]
+    E --> F["Restore <MACHINE_03> -> target surface form"]
+    F --> G{"Sentinel count in == out?"}
+    G -->|"yes"| H["Final: jian cha 3 hao ji"]
+    G -->|"no"| I["Reject -> safe fallback / repeat"]
+```
 
-The budget below assumes path (A), streaming ASR, and notes the path-(B) penalty.
+*Mandated-wording example:* "Dừng dây chuyền" is forced to the official "停止生产线" by lexical constraint rather than left to the model's free choice.
 
-### 1.4 The decode-stage reality: bandwidth-bound, not compute-bound
+---
 
-A subtle point that will impress a technical jury. ASR decode, NMT decode, and TTS acoustic generation are **autoregressive**: one token at a time, each step reloading model weights from memory. These steps are **memory-bandwidth-bound, not compute-bound.** Your 48 TOPS barely matters for them — what matters is LPDDR5X bandwidth and how small (quantized) the weights are.
+## Diagram 6 — Latency budget (end-of-speech to first audio)
 
-Consequence: the lever for decode latency is **quantization (smaller weights → fewer bytes per token)** and **short output sequences (phrase memory, constrained length)**, not raw TOPS. The encoder/feature stages are the compute-bound parts where TOPS helps. Say this — it shows you understand *why* the optimizations work, not just that they do.
+Estimated stage budget on QCS8550, short command, streaming-ASR path. The **endpoint silence wait plus the two autoregressive stages (NMT, TTS) dominate** — and the phrase-hit path skips NMT entirely.
 
-### 1.5 The budget (time to first translated audio, short command)
+```mermaid
+flowchart LR
+    A["Endpoint wait<br/>~300-500 ms"] --> B["ASR finalize<br/>~50-150 ms"]
+    B --> C["LID + lookup<br/>< 20 ms"]
+    C --> D["NMT decode<br/>~100-300 ms"]
+    D --> E["Glossary<br/>< 5 ms"]
+    E --> F["TTS first audio<br/>~150-400 ms"]
+    F --> G["Buffer<br/>~50-100 ms"]
+```
 
-Estimates for a short operational command on QCS8550, streaming ASR path. "Floor" = irreducible regardless of silicon.
+*Total ≈ 0.8–1.5 s to first audio for short commands. Confirm each stage by profiling on real QCS8550 hardware via Qualcomm AI Hub Workbench, then replace these estimates with measured numbers. Report p50/p95/p99, not a mean.*
 
-| Stage | Where it runs | Estimate | Driver / how to confirm |
+---
+
+## Diagram 7 — Data handling & privacy boundary
+
+Resolves the apparent contradiction between "fully offline" and "keeps improving." Configuration flows **one way** to the device; raw speech never leaves the factory; improvement data is collected only through opt-in, consented channels.
+
+```mermaid
+flowchart TD
+    subgraph DEV["Development environment (off-device)"]
+        p1["Public corpora"]
+        p2["Recorded factory speech (consented)"]
+        p3["Domain set: safety, glossary, tone, code-switch"]
+        p4["Annotate + bilingual validation"]
+        p5["Augment (noise SNR sweep)"]
+        p6["Train + evaluate quantized models"]
+        p1 --> p4
+        p2 --> p4
+        p3 --> p4
+        p4 --> p5 --> p6
+    end
+    subgraph FAC["Factory infrastructure (opt-in)"]
+        f1["Supervised correction logging"]
+        f2["On-prem / federated fine-tuning"]
+    end
+    subgraph DEVICE["Deployed device (on-device only)"]
+        e1["Quantized models"]
+        e2["Glossary / phrase packs"]
+        e3["Inference - no telemetry"]
+    end
+    p6 -->|"OTA: models (one-way)"| e1
+    p6 -->|"glossary/phrase packs (one-way)"| e2
+    f2 -->|"model updates only"| p6
+    e3 -.->|"opt-in, consented"| f1
+    f1 --> f2
+```
+
+---
+
+## References
+
+### Platform & tooling
+- **Qualcomm Dragonwing QCS8550** — 48 INT8 / 12 FP16 TOPS, Hexagon HTP (HVX + HMX), dedicated Hexagon audio DSP, Sensing Hub, Kryo CPU, Adreno 740, 4 nm. Confirmed via the Lantronix Open-Q 8550CS SOM product material: https://www.lantronix.com/products/open-q-8550cs-som-development-kit/
+- **Qualcomm AI Hub** — optimized on-device models and on-device latency/memory profiling (Workbench): https://aihub.qualcomm.com
+- **Whisper on AI Hub** — model sizes and the fixed 30-second (80×3000) input window that motivates choosing a streaming ASR instead: https://aihub.qualcomm.com/iot/models/whisper_base
+
+### Speech & text datasets
+- **VIVOS** (Vietnamese read speech, ~15 h): https://huggingface.co/datasets/AILAB-VNUHCM/vivos
+- **Mozilla Common Voice** (Vietnamese): https://commonvoice.mozilla.org/datasets
+- **VLSP** ASR challenge corpora (Vietnamese) — VLSP shared tasks.
+- **FLEURS** (Vietnamese + Mandarin, parallel read speech): https://huggingface.co/datasets/google/fleurs
+- **VietMed** (Vietnamese medical-domain ASR) — closest public analog to specialized-vocabulary-in-noise.
+- **AISHELL-1** (Mandarin ASR, ~170 h, Apache-2.0): https://www.openslr.org/33/
+- **AISHELL-3** (multi-speaker Mandarin TTS with pinyin/tone labels): arXiv:2010.11567
+- **AISHELL-4** (8-channel mic-array Mandarin, for beamforming work).
+- **KeSpeech** (Mandarin + 8 sub-dialects).
+- **MUSAN** (noise/music/speech, CC): arXiv:1510.08484
+- **DEMAND** (multichannel environmental noise, 18 environments).
+- **NOISEX-92** (noise incl. real factory-floor and machinery) — closest to the target acoustic environment.
+- **OPUS** (OpenSubtitles, TED2020) for Vi↔Zh parallel text — bootstrap only; known short/noisy: https://opus.nlpl.eu
+- Low-resource Vi↔Zh back-translation reference: arXiv:2003.02197
+
+### Methods
+- **Conformer** ASR encoder — Gulati et al., 2020 (arXiv:2005.08100).
+- **RNN-T transducer** (streaming) — Graves, 2012 (arXiv:1211.3711).
+- **Zipformer** (efficient encoder) — Yao et al., 2024 (arXiv:2310.11230).
+- **wait-k simultaneous translation** — Ma et al., 2019 (arXiv:1810.08398).
+- **Lexically constrained decoding** — Hokamp & Liu, 2017 (grid beam search, arXiv:1704.07138); Post & Vilar, 2018 (dynamic beam allocation, arXiv:1804.06609).
+- **MMSE log-spectral speech enhancement** — Ephraim & Malah, 1985 (with decision-directed a-priori SNR).
+- **Statistical VAD** — Sohn, Kim & Sung, 1999.
+- **MVDR / Capon beamforming** — Capon, 1969.
+- **MT evaluation** — COMET: Rei et al., 2020 (arXiv:2009.09025); chrF: Popović, 2015; sacreBLEU: Post, 2018 (arXiv:1804.08771).
+
+*Hardware figures and dataset/tooling links above were verified against current vendor and repository pages. Method entries are standard published references; confirm exact citation format for your submission's style.*
+
+---
+
+## Source parts (hardware bill of materials)
+
+Indicative components to source for a portable industrial unit. The compute module confirms the architecture: the QCS8550 ships as a production SoM with the dedicated always-on audio DSP the design relies on.
+
+| Subsystem | Part / option | Source | Notes |
 |---|---|---|---|
-| STFT framing (25 ms / 10 ms hop) | Audio DSP | ~25–35 ms | Algorithmic; window + hop. Floor. |
-| VAD + denoise | Audio DSP | ~10 ms added (pipelined w/ capture) | Streaming, overlaps capture |
-| **Endpoint silence wait** | DSP/CPU | **~300–500 ms** | **Hard floor.** Trailing-silence rule to declare utterance end. No silicon removes this. |
-| ASR finalize (last chunk) | HTP | ~50–150 ms | Streaming emits during speech; only tail remains. Profile on Workbench. |
-| LID + phrase-memory lookup | CPU | < 20 ms | Script check + fuzzy match over small index |
-| NMT decode (≈10–20 out tokens) | HTP | ~100–300 ms | Bandwidth-bound; ∝ output length. Profile. |
-| Glossary tag-restore | CPU | < 5 ms | Deterministic string ops |
-| TTS → **first audio sample** | HTP + CPU | ~150–400 ms | Vocoder time-to-first-chunk dominates (see 1.6) |
-| Output buffering | CPU | ~50–100 ms | Playout buffer |
-| **Total (time to first audio)** | | **≈ 0.8 – 1.5 s** | < 2 s feasible for short commands |
-
-**Phrase-memory hit path** (skips NMT, optionally uses cached audio):
-
-| Stage | Estimate |
-|---|---|
-| Framing + VAD + endpoint wait | ~350–550 ms |
-| ASR finalize | ~50–150 ms |
-| Lookup hit | < 20 ms |
-| Cached safety audio (no synth) | ~10–30 ms |
-| Buffer | ~50–100 ms |
-| **Total** | **≈ 0.5 – 0.9 s** |
-
-The phrase-hit path with pre-cached audio is where your "feels instant" demo lives. Make sure your demo commands are in the cache.
-
-**Where < 2 s breaks:** long sentences. NMT and TTS are autoregressive, so a 30-token sentence roughly triples the NMT and TTS lines. Report this honestly with a per-token model rather than a single average:
-
-$$T_{\text{e2e}} \approx T_{\text{fixed}} + T_{\text{wait}} + n_{\text{out}}\cdot(t_{\text{nmt/tok}} + t_{\text{tts/tok}})$$
-
-A single mean latency hides the tail. **Report p50 / p95 / p99**, split by (phrase-hit vs NMT) and (short vs long).
-
-### 1.6 Vocoder is usually the bottleneck
-
-TTS = acoustic model (text → mel) + vocoder (mel → waveform). The vocoder dominates. Options and their cost shape:
-
-- **LPCNet** — autoregressive, runs real-time on CPU but RTF hugs 1.0; sample-by-sample, so latency accumulates with duration.
-- **GAN vocoder (HiFi-GAN class), quantized on HTP** — non-autoregressive, generates a waveform chunk in one shot; far better time-to-first-sample. Preferred for this latency target.
-
-What the worker perceives is **time-to-first-audio-sample**, not total synthesis time — synthesis can stream and overlap with playback. Budget and report *first-sample* latency, and let the rest play out.
-
-### 1.7 The latency lever you're not using: wait-$k$ simultaneous translation
-
-The endpoint wait + two autoregressive stages are most of the budget. The way to actually beat them is to **not wait for end-of-speech**: begin translating after the first $k$ source tokens (wait-$k$ policy), so by the time the speaker stops you're nearly done.
-
-This is unusually safe for **Vietnamese↔Mandarin** because both are **SVO** with mild reordering pressure, so a low-latency wait-$k$ rarely has to revise. The cost is occasional revision when ASR updates its hypothesis. Even discussing this signals you understand the difference between "fast pipeline" and "real-time interpreting."
-
-### 1.8 Memory / model footprint budget
-
-| Model (INT8 / w8a16) | Approx. footprint |
-|---|---|
-| Neural denoiser | ~2–10 MB |
-| Neural VAD | < 1 MB |
-| ASR (streaming Conformer, small) or Whisper-Tiny | ~15–50 MB |
-| NMT (distilled small Transformer) | ~30–80 MB |
-| TTS acoustic + GAN vocoder | ~10–40 MB |
-| Phrase memory + bilingual glossary | a few MB |
-| **Peak co-resident** | **~150–250 MB** |
-
-On QCS8550's LPDDR5X this fits comfortably — **capacity is not the constraint.** The real costs are: (1) **NPU graph-switch overhead** when moving between ASR → NMT → TTS contexts on the HTP (if you swap rather than co-resident-load, that swap time goes *into the latency table above*); and (2) on the **QCS6490 wearable tier**, the budget genuinely tightens and you may have to swap. State whether models are co-resident or swapped, and put any swap cost in the budget.
-
-### 1.9 What to actually submit for Part 1
-
-- The table in §1.5 with your **own Workbench-profiled numbers** substituted in (compile each model, profile on QCS8550, paste latency + peak memory).
-- RTF and latency reported **separately** (§1.2).
-- A named ASR architecture choice (§1.3) and the reasoning.
-- p50/p95/p99, split by path (§1.5).
-- The DSP/HTP/CPU placement (§1.1) drawn correctly in your architecture diagram.
-
----
-
-## Part 2 — Context-Aware Translation Engine (the mechanics)
-
-Your proposal says context is "incorporated during translation rather than corrected after." Correct instinct, currently a black box. Here is the concrete machinery, tiered by cost, plus why this language pair makes it unusually tractable.
-
-### 2.1 Four mechanisms, ranked by cost
-
-**Tier 1 — Typed placeholder (tag) substitution. *Default for entities & IDs.***
-Deterministic, ~zero latency, guarantees terminology fidelity. Covers the bulk of industrial terms: machine IDs, line numbers, SOP codes, named equipment, PPE terms.
-
-1. **Detect** glossary spans in the ASR text using a per-factory gazetteer compiled into an **Aho-Corasick automaton** (or trie) over both languages — longest-match, $O(\text{text length})$.
-2. **Substitute** each matched span with a **typed sentinel** that the NMT passes through untranslated, e.g. `⟨MACHINE_07⟩`, `⟨SOP_12⟩`, `⟨PPE⟩`. Keep a map `placeholder → {src surface, tgt surface}`.
-3. **Translate** the masked sentence.
-4. **Restore** placeholders with the **target-language** surface form from the bilingual glossary.
-
-**Tier 2 — Lexically-constrained decoding. *For mandated wording only.***
-Some terms must map to one official phrase (safety verbs, regulated terminology) and can't be blind-substituted because they must inflect/agree with the sentence. Force them into the output during beam search:
-- **Grid Beam Search** (Hokamp & Liu, 2017) — guarantees constraints appear; beam grows with #constraints.
-- **Dynamic Beam Allocation** (Post & Vilar, 2018) — same guarantee, **bounded** beam width; the efficient choice.
-
-Cost: beam-search overhead fights your latency budget. **Reserve for the small mandated-phrase set**, not general vocabulary.
-
-**Tier 3 — Whole-sentence phrase memory.** Already in your design. Highest-frequency complete commands bypass NMT entirely (see safety note 2.4).
-
-**Tier 4 — Prompt/prefix glossary conditioning.** Only if your NMT is a small decoder-LM: prepend relevant glossary entries as context. Flexible but **bloats context → raises latency**, and gives no hard guarantee. Mention as a fallback, don't lead with it.
-
-**Recommended stack:** Tier 3 for frequent whole commands → Tier 1 for everything entity-like → Tier 2 for the mandated safety subset. Cheapest mechanism that can handle each case handles it.
-
-### 2.2 Why this pair is unusually friendly to tag substitution
-
-The classic failure of placeholder substitution is **morphology and agreement** — the inserted term must inflect to fit the target grammar. But **Mandarin is morphologically near-isolating** and **Vietnamese is analytic** (no inflection, no agreement, no case). A restored surface form drops in cleanly in both directions. This is a real, defensible advantage of your specific language pair — call it out. The residual risk is **word order**, addressed next.
-
-### 2.3 The training requirement (the part people skip)
-
-A vanilla NMT model will mishandle sentinel tokens — drop them, duplicate them, or place them wrong. You must **fine-tune the NMT on synthetic data containing the sentinels and constraints**, so it learns to (a) preserve each placeholder exactly once and (b) position it correctly in target word order. Generate this data by templating your glossary into sentence frames and round-tripping. Without this step, Tier 1 silently fails.
-
-### 2.4 Worked examples (using your own phrases)
-
-**Entity (Tier 1), Vi → Zh:**
-```
-ASR:        Kiểm tra máy số 3
-Detect:     "máy số 3"  →  ⟨MACHINE_03⟩
-Masked:     Kiểm tra ⟨MACHINE_03⟩
-NMT:        检查 ⟨MACHINE_03⟩
-Restore:    ⟨MACHINE_03⟩ → "3号机"
-Output:     检查3号机
-```
-The machine ID can never be mistranslated, because it never entered the model.
-
-**Mandated safety wording (Tier 2), Vi → Zh:**
-```
-"Dừng dây chuyền"  must always render as the official  "停止生产线"
-→ enforce as a decoding constraint, not a guess.
-```
-
-### 2.5 The fail-safe (this is also a safety mechanism)
-
-A placeholder-count check is a free, powerful guardrail: **if the number of sentinels going into the NMT ≠ the number coming out, the translation is corrupt — reject it.** On rejection, fall back to phrase memory or a safe templated rendering and **signal uncertainty** ("không chắc — xin nhắc lại" / "不确定，请重复"). This directly addresses the safety-inversion risk: a confident wrong translation of a safety command is the worst failure mode, and the count check catches a large class of them deterministically.
-
-### 2.6 The real moat
-
-Vietnamese↔Mandarin is comparatively low-resource. Your translation ceiling is set by **domain parallel data**, not by the inference stack. Build it from: bilingual SOP/manual documents, glossary-templated synthetic sentences (which also serve §2.3), and back-translation augmentation of monolingual factory text. **This dataset is more of a competitive moat than the pipeline** — say so, and describe how you'd build it.
-
----
-
-## Part 3 — Evaluation Protocol
-
-No measurement plan is the biggest hole in the current proposal. For a *safety* product, "we translate factory commands" without "here is our error rate on emergency phrases and what happens when we're unsure" is the gap between a demo and a fundable product. This section is the plan.
-
-### 3.1 Metrics per stage
-
-**ASR**
-- **CER** primary, WER secondary. CER handles Vietnamese diacritics and Mandarin characters more meaningfully than WER.
-- Measured **clean *and* in factory noise** — an SNR sweep (e.g. +10, +5, 0, −5 dB) using **real factory recordings**, augmented with noise corpora (MUSAN / DEMAND). Clean-only WER is meaningless for this product.
-- **Tone-confusion rate**, reported separately: a curated **minimal-pair set** where items differ only in tone; measure the substitution rate within tonal pairs. This is where aggressive denoising and INT8 quantization do their damage, and aggregate WER hides it.
-- Reported **per language** and on a **code-switch set** (mixed Vi/Zh terms in one utterance).
-
-**Language ID**
-- Accuracy + confusion matrix; explicit **code-switch behavior** (does routing survive mixed input?).
-
-**NMT**
-- **chrF** and **COMET** (neural, better human correlation) as primary; **sacreBLEU** with character-level tokenization for Chinese as secondary.
-- **Terminology accuracy**: % of glossary terms rendered correctly — *the metric that matters for industry*, often uncorrelated with BLEU.
-- **Safety-command accuracy**: exact/semantic match on the emergency set (see 3.3).
-
-**TTS**
-- **MOS** (naturalness), native-listener panel.
-- **Intelligibility** via round-trip: run synthesized audio back through ASR, measure WER.
-- **Tone-correctness MOS**, scored *separately* by native listeners — natural-sounding speech with wrong tones is a safety failure, and naturalness MOS won't catch it.
-
-**End-to-end**
-- **Task success rate**: does the listener take the correct action? The real product metric.
-- **Latency p50/p95/p99** for time-to-first-audio and time-to-full-audio, split by phrase-hit vs NMT and short vs long (ties back to Part 1).
-- **Safety metrics** (see 3.3).
-
-### 3.2 Test sets
-
-| Set | Purpose |
-|---|---|
-| Clean read speech | Baseline upper bound |
-| Factory-noise speech | Real conditions; multiple machine types, **multiple speakers incl. Northern & Southern Vietnamese**, gender/age diversity |
-| Code-switch set | Mixed-language robustness |
-| Tone minimal-pair set | Isolate tonal degradation from quantization/denoise |
-| **Safety command set** | The critical one — see 3.3 |
-
-### 3.3 Safety-set methodology (the part that makes it fundable)
-
-1. **Curate** the operational safety command set (emergency shutdown, stop line, PPE, lockout, etc.) with **bilingual-reviewer-approved correct translations**.
-2. **Severity tiers.** Define failure severity, e.g.:
-   - *Critical*: meaning inversion or safety-instruction reversal (e.g. "don't shut off" → "shut off"). **Zero-tolerance gate.**
-   - *Major*: wrong entity (wrong machine number).
-   - *Minor*: dysfluency that preserves meaning.
-3. **Phrase-memory false-positive rate.** The fuzzy matcher's threshold is a **safety parameter** — measure how often it returns a confident wrong cached translation, especially on near-miss minimal pairs ("đừng tắt máy" vs "tắt máy"). Report the FP rate as a function of the threshold.
-4. **Fail-safe coverage.** Define and measure: when the system is wrong, how often does it correctly **signal uncertainty / ask for repeat** instead of confidently emitting the error? This is an acceptance criterion, not a nice-to-have.
-5. **Human adjudication** for the critical tier; report with confidence intervals.
-
-### 3.4 Ablations (these directly test the critique)
-
-- **Denoise → ASR, on vs off.** Tests whether the front-end denoiser *helps or hurts* WER (enhancement artifacts can raise WER on a mismatched ASR). If it hurts, route denoising only to the human-audible path.
-- **PTQ vs QAT** for ASR — measured on the **tone-confusion** set, not just aggregate WER.
-- **Phrase memory on/off** — latency *and* the safety FP cost.
-- **Tag substitution on/off** — terminology accuracy.
-- **wait-$k$ vs full-utterance** — latency vs revision rate.
-
-### 3.5 Statistics & harness
-
-- Report **confidence intervals** (bootstrap) and **significance tests** when comparing configurations — don't compare bare point estimates.
-- **On-device latency & peak memory** profiled on real **QCS8550** hardware via **Qualcomm AI Hub Workbench**, not on a laptop. These are the numbers that fill Part 1's table.
-
-### 3.6 Illustrative acceptance targets (set your own, but commit to them)
-
-| Metric | Target (example) |
-|---|---|
-| CER in 0 dB factory noise (per language) | below a stated threshold |
-| Tone-confusion rate | below a stated threshold |
-| Terminology accuracy | ≥ high-90s % |
-| **Critical-tier safety errors** | **zero (hard gate)** |
-| Fail-safe coverage of true errors | ≥ stated % |
-| Time-to-first-audio, p95, short command | < 2 s |
-
----
-
-### Sources for hardware figures
-QCS8550 / Dragonwing: 48 INT8 / 12 FP16 TOPS, Hexagon HTP (HVX + HMX), dedicated Hexagon audio DSP, Sensing Hub 3.0, Kryo CPU, Adreno 740, LPDDR5X — Qualcomm Dragonwing QCS8550/QCM8550 product material and SOM vendor briefs (Lantronix Open-Q 8550CS, Thundercomm/RidgeRun, Firefly). Whisper-Base sizes (encoder 23.7M/90.7 MB, decoder 48.9M/187 MB, 80×3000 fixed input, 200-token max decode) and w8a16 quantization — Qualcomm AI Hub model pages. Constrained-decoding methods — Hokamp & Liu (2017), Post & Vilar (2018).
+| Compute (primary tier) | Qualcomm Dragonwing **QCS8550** SoM — Lantronix **Open-Q 8550CS** or Thundercomm **TurboX C8550** | Mouser; Atlantik Elektronik; BCD Atlantik; Thundercomm | Production-ready; 48 INT8 TOPS; dedicated Hexagon audio DSP; Open-Q is TAA/NDAA-compliant with ~10-yr longevity. |
+| Compute (low-power tier) | Qualcomm **QCS6490** SoM (e.g. Qualcomm RB3 Gen 2 / Thundercomm / Lantronix 6490 modules) | Thundercomm; Lantronix; Qualcomm | For a lighter wearable variant; tighter memory/TOPS — validate model footprint here. |
+| Microphone array | 2–4 **MEMS** mics (PDM or I2S), e.g. Knowles, Infineon XENSIV IM69D, or TDK InvenSense ICS series, on a far-field array layout | Mouser / DigiKey / Arrow | Replaces the single electret in the original schematic; required for beamforming. Fix inter-mic spacing vs highest frequency of interest. |
+| Audio codec / amplifier | I2S audio codec + speaker amplifier (e.g. TI / Cirrus Logic class) | Mouser / DigiKey | Output path and any open-speaker drive. |
+| Output transducer | Bluetooth headset + **bone-conduction** option; integrated speaker | COTS | Bone-conduction recommended for high-noise floors. |
+| Power | Li-ion/LiPo pack + PMIC/charger sized to the SoM | COTS | Portable operation; the audio-DSP offload is what keeps always-on power low. |
+| Enclosure | Industrial-rated (dust/impact), comfortable for shift-long wear | Custom | Factory environment; consider IP rating. |
