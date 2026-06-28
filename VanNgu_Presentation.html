@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vân Ngữ — A cloud of language, kept on the ground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0D1521; --ink2:#111B29; --surface:#172332; --surface2:#1D2C3D;
+  --line:#27384B; --line2:#33485e;
+  --text:#EAF2F8; --muted:#8FA3B6; --faint:#5E7286;
+  --vi:#37C9A8;      /* Vietnamese voice — jade */
+  --vi-deep:#1d8c78;
+  --zh:#6BA8FF;      /* Mandarin voice — sky */
+  --zh-deep:#3f74c4;
+  --amber:#F4A93C;   /* safety thread */
+  --amber-deep:#b9761b;
+  --display:"Space Grotesk",-apple-system,BlinkMacSystemFont,sans-serif;
+  --body:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --cjk:"Noto Sans SC","IBM Plex Sans",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--ink); color:var(--text); font-family:var(--body);
+  overflow:hidden; -webkit-font-smoothing:antialiased; line-height:1.5;
+}
+.cjk{font-family:var(--cjk)}
+.vi{color:var(--vi)} .zh{color:var(--zh)} .am{color:var(--amber)}
+
+/* ---------- deck shell ---------- */
+#deck{position:fixed;inset:0}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  padding:clamp(28px,5vw,80px) clamp(28px,7vw,120px) clamp(60px,7vh,90px);
+  opacity:0;visibility:hidden;transform:translateY(14px) scale(.995);
+  transition:opacity .5s ease,transform .5s ease,visibility .5s;
+  overflow:hidden;
+}
+.slide.is-active{opacity:1;visibility:visible;transform:none;z-index:2}
+.slide.is-past{transform:translateY(-14px) scale(.995)}
+
+/* atmosphere */
+.slide::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(120% 90% at 88% -10%, rgba(107,168,255,.10), transparent 55%),
+    radial-gradient(90% 80% at -8% 108%, rgba(55,201,168,.10), transparent 55%);
+}
+.slide > *{position:relative;z-index:1}
+
+/* spine / eyebrow */
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--muted);display:flex;align-items:center;gap:14px;margin-bottom:26px;
+}
+.eyebrow .idx{color:var(--amber)}
+.eyebrow .bar{height:1px;width:46px;background:var(--line2)}
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:1.04}
+h1{font-size:clamp(40px,8vw,104px);font-weight:700}
+h2{font-size:clamp(28px,4.6vw,58px)}
+h3{font-size:clamp(19px,2.3vw,27px)}
+p.lead{font-size:clamp(17px,1.9vw,23px);color:var(--text);max-width:60ch;line-height:1.5}
+.sub{color:var(--muted)}
+strong{font-weight:600;color:#fff}
+
+/* footer rail */
+#rail{position:fixed;left:0;right:0;bottom:0;height:54px;z-index:30;
+  display:flex;align-items:center;gap:18px;
+  padding:0 clamp(28px,7vw,120px);
+  border-top:1px solid var(--line);background:linear-gradient(180deg,transparent,rgba(8,13,20,.6));
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#rail .brand{color:var(--text);font-weight:500}
+#rail .brand b{color:var(--vi);font-weight:600}
+#progress{flex:1;height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+#progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--vi),var(--zh));transition:width .5s ease}
+#count{color:var(--text)}
+#count b{color:var(--amber)}
+
+/* nav hint dots */
+#dots{position:fixed;top:0;right:clamp(20px,4vw,48px);height:46px;display:flex;align-items:center;gap:7px;z-index:30}
+#dots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line2);cursor:pointer;padding:0;transition:transform .2s,background .2s}
+#dots button.on{background:var(--amber);transform:scale(1.5)}
+#dots button:focus-visible{outline:2px solid var(--zh);outline-offset:2px}
+
+/* helper layouts */
+.grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(24px,4vw,64px);align-items:center;flex:1;min-height:0}
+.spread{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+.cards{display:grid;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+.card h3{font-size:18px;margin-bottom:6px}
+.card p{color:var(--muted);font-size:15px}
+.card .k{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase}
+
+/* stat row */
+.stats{display:flex;gap:clamp(20px,4vw,60px);flex-wrap:wrap;margin-top:8px}
+.stat .n{font-family:var(--display);font-weight:700;font-size:clamp(34px,5vw,62px);line-height:1;
+  background:linear-gradient(120deg,var(--vi),var(--zh));-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat .l{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:8px;max-width:22ch}
+
+/* tag chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;max-width:62ch}
+.chip{font-family:var(--mono);font-size:12px;letter-spacing:.04em;border:1px solid var(--line2);
+  color:var(--muted);padding:6px 11px;border-radius:999px}
+
+/* ===== COVER ===== */
+.cover{justify-content:center}
+.cover .kicker{font-family:var(--mono);font-size:13px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber);margin-bottom:22px}
+.cover h1{margin-bottom:6px}
+.cover .mean{font-family:var(--cjk);font-size:clamp(15px,2vw,20px);color:var(--muted);letter-spacing:.06em;margin-bottom:26px}
+.cover .mean b{color:var(--vi)}
+.cover .tag{font-size:clamp(18px,2.4vw,28px);max-width:30ch;color:var(--text);font-family:var(--display);font-weight:500;line-height:1.18}
+.cover .foot{margin-top:40px;display:flex;gap:26px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* waveform */
+.wave{display:flex;align-items:center;gap:3px;height:54px}
+.wave i{width:3px;border-radius:3px;background:linear-gradient(180deg,var(--vi),var(--zh));opacity:.85;
+  animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{height:8px}50%{height:var(--h,40px)}}
+
+/* ===== HERO DIALOGUE ===== */
+.demo{display:flex;flex-direction:column;gap:16px;flex:1;justify-content:center;min-height:0}
+.gap-label{align-self:center;font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);
+  display:flex;align-items:center;gap:12px;margin:2px 0}
+.gap-label .ln{height:1px;width:60px;background:var(--line2)}
+.bubble{max-width:74%;padding:16px 20px;border-radius:16px;border:1px solid var(--line);background:var(--surface);
+  opacity:0;transform:translateY(10px);transition:opacity .5s,transform .5s}
+.bubble.show{opacity:1;transform:none}
+.bubble .who{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px;display:flex;gap:8px;align-items:center}
+.bubble .who .dot{width:8px;height:8px;border-radius:50%}
+.bubble .src{font-size:clamp(16px,1.8vw,20px);font-weight:500;margin-bottom:4px}
+.bubble .dst{font-size:clamp(15px,1.7vw,19px)}
+.bubble.zh{border-color:rgba(107,168,255,.4);align-self:flex-start}
+.bubble.zh .who{color:var(--zh)} .bubble.zh .who .dot{background:var(--zh)}
+.bubble.zh .src{font-family:var(--cjk);color:var(--zh)}
+.bubble.vi{border-color:rgba(55,201,168,.4);align-self:flex-end;text-align:right}
+.bubble.vi .who{color:var(--vi);justify-content:flex-end} .bubble.vi .who .dot{background:var(--vi)}
+.bubble.vi .src{color:var(--vi)}
+.bubble .dst.cjk{color:var(--zh)}
+.latency{align-self:center;margin-top:6px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--amber);
+  opacity:0;transition:opacity .5s}
+.latency.show{opacity:1}
+.latency b{font-size:15px}
+
+/* ===== PIPELINE ===== */
+.pipe{display:flex;flex-direction:column;gap:9px;flex:1;justify-content:center;min-height:0;margin-top:4px}
+.prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.node{border:1px solid var(--line2);border-radius:11px;padding:11px 14px;background:var(--surface);min-width:0}
+.node .t{font-size:14.5px;font-weight:500}
+.node .z{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:3px}
+.node.dsp{border-color:rgba(244,169,60,.45)} .node.dsp .z{color:var(--amber)}
+.node.npu{border-color:rgba(107,168,255,.45)} .node.npu .z{color:var(--zh)}
+.node.cpu{border-color:rgba(55,201,168,.45)} .node.cpu .z{color:var(--vi)}
+.node.gate{border-style:dashed;border-color:var(--amber)}
+.arr{color:var(--faint);font-family:var(--mono);font-size:16px}
+.legend{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:7px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* ===== LATENCY BARS ===== */
+.budget{display:flex;flex-direction:column;gap:11px;flex:1;justify-content:center;min-height:0}
+.brow{display:grid;grid-template-columns:200px 1fr 96px;align-items:center;gap:14px}
+.brow .lab{font-size:14px;color:var(--text)}
+.brow .lab small{display:block;color:var(--muted);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em}
+.brow .track{height:13px;background:var(--surface);border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+.brow .track > i{display:block;height:100%;border-radius:7px}
+.brow .ms{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+.brow.crit .lab{color:var(--amber)}
+
+/* ===== TABLE ===== */
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th,.tbl td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+.tbl th{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl td:first-child{font-weight:500}
+.tbl .zcol{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+
+/* list */
+.flow-list{display:grid;gap:13px;margin-top:6px}
+.fl{display:flex;gap:16px;align-items:flex-start}
+.fl .n{font-family:var(--mono);font-size:12px;color:var(--amber);padding-top:3px;min-width:24px}
+.fl .b h3{font-size:18px;margin-bottom:3px}
+.fl .b p{color:var(--muted);font-size:15px;max-width:58ch}
+
+/* map dots (market) */
+.vnmap{position:relative;aspect-ratio:3/4;width:100%;max-width:330px;border:1px solid var(--line);border-radius:16px;
+  background:radial-gradient(120% 100% at 50% 0,rgba(107,168,255,.08),transparent),var(--ink2);overflow:hidden}
+.vnmap .pin{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 0 4px rgba(244,169,60,.15);animation:ping 2.6s ease-out infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(244,169,60,.4)}70%,100%{box-shadow:0 0 0 14px rgba(244,169,60,0)}}
+.vnmap .cap{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* close */
+.close{justify-content:center;align-items:flex-start}
+.close h2{max-width:20ch;margin-bottom:18px}
+.close .mean{font-family:var(--cjk);color:var(--muted);font-size:18px;margin-bottom:24px}
+.close .repo{font-family:var(--mono);font-size:13px;color:var(--vi);letter-spacing:.06em;border:1px solid var(--line2);padding:11px 16px;border-radius:10px;display:inline-block}
+
+.note{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em;margin-top:14px;max-width:70ch}
+
+/* hint */
+#hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:25;
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  transition:opacity .6s}
+#hint.hide{opacity:0}
+
+@media (max-width:860px){
+  .grid2{grid-template-columns:1fr;gap:20px}
+  .brow{grid-template-columns:120px 1fr 70px}
+  .vnmap{max-width:230px}
+  .bubble{max-width:90%}
+  .slide{padding:24px 22px 70px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:opacity .2s ease!important}
+}
+</style>
+</head>
+<body>
+<div id="deck">
+
+  <!-- 1 COVER -->
+  <section class="slide cover is-active" data-sec="OneVoice AI Challenge">
+    <div class="kicker">OneVoice AI Challenge · Edge AI on Snapdragon</div>
+    <h1>Vân Ngữ</h1>
+    <div class="mean">vân = <b>cloud</b> · ngữ = <b>language</b> — &nbsp;a cloud of language, kept on the ground</div>
+    <div class="wave" id="coverwave" aria-hidden="true"></div>
+    <p class="tag" style="margin-top:26px">An offline voice bridge between Vietnamese workers and Mandarin supervisors — on the factory floor.</p>
+    <div class="foot">
+      <span>Vietnamese ⇄ Mandarin</span><span>100% on-device</span><span>Built for industry</span>
+    </div>
+  </section>
+
+  <!-- 2 THE GAP -->
+  <section class="slide" data-sec="The problem">
+    <div class="eyebrow"><span class="idx">01</span><span class="bar"></span>The gap on the line</div>
+    <div class="spread">
+      <h2>Vietnam builds the world's products.<br>Two languages run every shift.</h2>
+      <p class="lead sub" style="margin-top:22px">As global supply chains diversify, Mandarin-speaking managers and engineers coordinate daily with Vietnamese operators and quality teams. They share a floor — not a language.</p>
+      <div class="chips">
+        <span class="chip">Internet-dependent apps</span>
+        <span class="chip">High latency</span>
+        <span class="chip">Generic, literal translation</span>
+        <span class="chip">Phones don't belong on a line</span>
+        <span class="chip am" style="border-color:var(--amber-deep);color:var(--amber)">Errors become safety incidents</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 MARKET -->
+  <section class="slide" data-sec="Market">
+    <div class="eyebrow"><span class="idx">02</span><span class="bar"></span>Why now — China+1</div>
+    <div class="grid2">
+      <div>
+        <h2>A real, mappable demand.</h2>
+        <p class="lead sub" style="margin-top:16px">A first-pass public-source dataset of Chinese and China-linked manufacturing facilities in Vietnam — the floors where this conversation happens every day.</p>
+        <div class="stats">
+          <div class="stat"><div class="n">41</div><div class="l">facilities mapped (first pass)</div></div>
+          <div class="stat"><div class="n">10+</div><div class="l">sectors, electronics to EV</div></div>
+        </div>
+        <div class="chips">
+          <span class="chip">Bắc Ninh</span><span class="chip">Đồng Nai</span><span class="chip">Bình Dương</span>
+          <span class="chip">Tiền Giang</span><span class="chip">Nghệ An</span><span class="chip">Thái Bình</span>
+          <span class="chip">Phú Thọ</span><span class="chip">Bà Rịa–Vũng Tàu</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <div class="vnmap" aria-label="Map of Chinese-linked manufacturing clusters in Vietnam">
+          <div class="pin" style="left:46%;top:14%"></div>
+          <div class="pin" style="left:40%;top:20%;animation-delay:.4s"></div>
+          <div class="pin" style="left:52%;top:30%;animation-delay:.8s"></div>
+          <div class="pin" style="left:44%;top:46%;animation-delay:1.1s"></div>
+          <div class="pin" style="left:38%;top:70%;animation-delay:.6s"></div>
+          <div class="pin" style="left:48%;top:78%;animation-delay:1.4s"></div>
+          <div class="pin" style="left:55%;top:62%;animation-delay:.2s"></div>
+          <div class="cap">Electronics · Metals · Textiles · Solar/PV · Machinery · EV</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 SOLUTION -->
+  <section class="slide" data-sec="The solution">
+    <div class="eyebrow"><span class="idx">03</span><span class="bar"></span>Vân Ngữ</div>
+    <div class="spread">
+      <h2>Push to talk. Speak. Be understood —<br>with no signal required.</h2>
+      <p class="lead sub" style="margin:18px 0 6px">The full pipeline — speech recognition, translation, speech synthesis — runs locally on Snapdragon using Qualcomm AI Hub models. An <span class="am">Industrial Knowledge Layer</span> keeps the factory's own words intact.</p>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr);margin-top:18px">
+        <div class="card"><div class="k">Offline</div><h3>Nothing leaves the device</h3><p>Works in noisy, signal-dead plants. Operational data stays private.</p></div>
+        <div class="card"><div class="k">Real-time</div><h3>Under two seconds</h3><p>On-device inference, tuned for a back-and-forth that feels live.</p></div>
+        <div class="card"><div class="k">Context-aware</div><h3>Speaks factory, not phrasebook</h3><p>Machine names, SOPs and safety terms preserved, not paraphrased.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 USE CASE (HERO DEMO) -->
+  <section class="slide" data-sec="Use case" id="demoSlide">
+    <div class="eyebrow"><span class="idx">04</span><span class="bar"></span>Assembly Line 3 · the hydraulic press</div>
+    <div class="demo">
+      <div class="bubble zh" data-step="1">
+        <div class="who"><span class="dot"></span>Supervisor · Mandarin</div>
+        <div class="src cjk">请立即检查三号液压机。</div>
+        <div class="dst">→ Vui lòng kiểm tra ngay máy ép thủy lực số 3.</div>
+      </div>
+      <div class="gap-label" data-step="2"><span class="ln"></span>on-device · in factory noise<span class="ln"></span></div>
+      <div class="bubble vi" data-step="3">
+        <div class="who">Operator · Vietnamese<span class="dot"></span></div>
+        <div class="src">Máy ép đang bị kẹt và cần dừng dây chuyền.</div>
+        <div class="dst cjk">→ 液压机卡住了，需要暂停生产线。</div>
+      </div>
+      <div class="latency" data-step="4">end-of-speech → translated audio &nbsp; <b>&lt; 2.0 s</b> &nbsp;· no internet</div>
+    </div>
+  </section>
+
+  <!-- 6 PIPELINE -->
+  <section class="slide" data-sec="Architecture">
+    <div class="eyebrow"><span class="idx">05</span><span class="bar"></span>How it works — one streaming pipeline</div>
+    <div class="pipe">
+      <div class="prow">
+        <div class="node dsp"><div class="t">Mic array → Beamforming + VAD + light denoise</div><div class="z">Hexagon audio DSP</div></div>
+        <span class="arr">→</span>
+        <div class="node npu"><div class="t">Streaming ASR + language ID</div><div class="z">NPU</div></div>
+      </div>
+      <div class="prow">
+        <span class="arr">↳</span>
+        <div class="node gate"><div class="t">Phrase memory match?</div><div class="z am">safety-gated</div></div>
+        <span class="arr">— hit →</span>
+        <div class="node cpu"><div class="t">Cached translation / audio</div><div class="z">CPU</div></div>
+      </div>
+      <div class="prow">
+        <span class="arr">— miss →</span>
+        <div class="node npu"><div class="t">Tag substitution → NMT → constrained decode</div><div class="z">NPU</div></div>
+        <span class="arr">→</span>
+        <div class="node cpu"><div class="t">Glossary restore + fail-safe</div><div class="z">CPU</div></div>
+      </div>
+      <div class="prow">
+        <span class="arr">→</span>
+        <div class="node npu"><div class="t">Streaming TTS + neural vocoder</div><div class="z">NPU</div></div>
+        <span class="arr">→</span>
+        <div class="node"><div class="t">🔊 Speaker / headset</div><div class="z">output</div></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--amber)"></i>Audio DSP — always-on, low power</span>
+        <span><i style="background:var(--zh)"></i>NPU — AI inference</span>
+        <span><i style="background:var(--vi)"></i>CPU — control &amp; lookup</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 FRONT END -->
+  <section class="slide" data-sec="Hearing">
+    <div class="eyebrow"><span class="idx">06</span><span class="bar"></span>Hearing speech over the machines</div>
+    <div class="grid2">
+      <div>
+        <h2>A microphone array,<br>not a single mic.</h2>
+        <p class="lead sub" style="margin-top:16px">2–4 MEMS elements enable beamforming — steering toward the speaker and rejecting directional machine noise. A neural VAD trained on factory noise gates inference to real speech.</p>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="k">Key insight</div><h3>Don't over-clean for the machine</h3><p>The recognizer hears lightly-processed, noise-robust audio. Aggressive denoising — which adds artifacts that raise error — is reserved for human listening only.</p></div>
+        <div class="card"><div class="k">On the DSP</div><h3>Always-on, low power</h3><p>Beamforming, VAD and feature extraction run on the Hexagon audio DSP — saving the CPU and the battery.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 ASR / TONAL -->
+  <section class="slide" data-sec="Understanding">
+    <div class="eyebrow"><span class="idx">07</span><span class="bar"></span>Two tonal languages, in real time</div>
+    <div class="spread">
+      <h2>Streaming recognition that<br>respects tone.</h2>
+      <p class="lead sub" style="margin:16px 0 4px">A streaming model emits words <em>during</em> speech and identifies the language inline — handling the code-switching workers actually use. Tone lives in a fragile pitch contour, so it gets special care.</p>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr);margin-top:16px">
+        <div class="card"><div class="k">Streaming</div><h3>Finalizes in ~100 ms</h3><p>Not a 30-second transcription window — a real-time transducer.</p></div>
+        <div class="card"><div class="k">Tone-safe</div><h3>Quantization-aware</h3><p>Trained for low-bit hardware so near-homophone tones survive.</p></div>
+        <div class="card"><div class="k">Measured</div><h3>Tone confusion, tracked</h3><p>Reported separately — never hidden inside an average error rate.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 CONTEXT ENGINE -->
+  <section class="slide" data-sec="Translating">
+    <div class="eyebrow"><span class="idx">08</span><span class="bar"></span>The Industrial Knowledge Layer, made concrete</div>
+    <div class="grid2">
+      <div>
+        <h2>Terminology guaranteed by<br>mechanism — not luck.</h2>
+        <p class="lead sub" style="margin-top:16px">Machine IDs, line numbers and SOP codes are detected and masked as typed tokens that pass through translation untouched, then restored in the target language. Mandated safety wording is <em>forced</em> by constrained decoding.</p>
+      </div>
+      <div class="card" style="font-family:var(--mono);font-size:14px;line-height:1.9">
+        <div class="k" style="margin-bottom:10px">worked example</div>
+        <div><span class="sub">in &nbsp;</span> Kiểm tra <span class="vi">máy số 3</span></div>
+        <div><span class="sub">mask</span> Kiểm tra <span class="am">⟨MACHINE_03⟩</span></div>
+        <div><span class="sub">nmt&nbsp;</span> 检查 <span class="am">⟨MACHINE_03⟩</span></div>
+        <div><span class="sub">out&nbsp;</span> <span class="cjk zh">检查3号机</span></div>
+        <div style="margin-top:10px;color:var(--muted)">token count in ≠ out → reject &amp; ask again</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 SAFETY -->
+  <section class="slide" data-sec="Safety">
+    <div class="eyebrow"><span class="idx am">09</span><span class="bar"></span><span class="am">Safety is gated, not assumed</span></div>
+    <div class="spread">
+      <h2 style="max-width:24ch">The worst failure is a <span class="am">confident, wrong</span> safety instruction.</h2>
+      <p class="lead sub" style="margin:18px 0 4px">A fuzzy match must never turn “don't switch off” into “switch off.” So the match threshold is treated as a safety parameter, and the system refuses to guess.</p>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr);margin-top:16px">
+        <div class="card" style="border-color:var(--amber-deep)"><div class="k">Inversion guard</div><h3 class="cjk" style="font-family:var(--body)">đừng tắt máy ≠ tắt máy</h3><p>Negation and antonym pairs are kept provably distinct.</p></div>
+        <div class="card" style="border-color:var(--amber-deep)"><div class="k">Fail-safe</div><h3>When unsure, ask to repeat</h3><p>Below a confidence margin, it stops rather than risk an inversion.</p></div>
+        <div class="card" style="border-color:var(--amber-deep)"><div class="k">Zero-tolerance</div><h3>Critical-tier gate</h3><p>Any meaning inversion is a hard fail in evaluation.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 RUNTIME / SILICON -->
+  <section class="slide" data-sec="Silicon">
+    <div class="eyebrow"><span class="idx">10</span><span class="bar"></span>It runs on real, shippable silicon</div>
+    <div class="grid2">
+      <div>
+        <h2>Qualcomm Dragonwing<br>QCS8550.</h2>
+        <p class="lead sub" style="margin-top:14px">A production module (e.g. Lantronix Open-Q 8550CS) with the dedicated always-on audio DSP this design depends on. Everything co-resident in roughly 150–250 MB of quantized models.</p>
+        <p class="note">48 INT8 TOPS Hexagon NPU · dedicated Hexagon audio DSP · Kryo CPU · 4 nm. Lower-power QCS6490 tier for a lighter wearable.</p>
+      </div>
+      <table class="tbl">
+        <tr><th>Engine</th><th>Does</th></tr>
+        <tr><td>Audio DSP</td><td class="sub">Beamforming · VAD · features</td></tr>
+        <tr><td>NPU</td><td class="sub">ASR · translation · TTS</td></tr>
+        <tr><td>CPU</td><td class="sub">Control · routing · glossary &amp; phrase lookup</td></tr>
+        <tr><td>Storage</td><td class="sub">Models · knowledge base · config</td></tr>
+        <tr><td colspan="2" style="color:var(--vi);border-bottom:none;padding-top:16px">No speech, text or user data leaves the device.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 12 LATENCY -->
+  <section class="slide" data-sec="Latency">
+    <div class="eyebrow"><span class="idx">11</span><span class="bar"></span>Where the two seconds go</div>
+    <div class="budget">
+      <div class="brow crit"><div class="lab">Endpoint wait<small>hard floor</small></div><div class="track"><i style="width:42%;background:var(--amber)"></i></div><div class="ms">~300–500</div></div>
+      <div class="brow"><div class="lab">ASR finalize<small>streaming</small></div><div class="track"><i style="width:14%;background:var(--zh)"></i></div><div class="ms">~50–150</div></div>
+      <div class="brow"><div class="lab">Lookup + routing</div><div class="track"><i style="width:3%;background:var(--vi)"></i></div><div class="ms">&lt; 20</div></div>
+      <div class="brow"><div class="lab">NMT decode<small>autoregressive</small></div><div class="track"><i style="width:26%;background:var(--zh)"></i></div><div class="ms">~100–300</div></div>
+      <div class="brow"><div class="lab">TTS first audio<small>vocoder-bound</small></div><div class="track"><i style="width:34%;background:var(--zh)"></i></div><div class="ms">~150–400</div></div>
+      <div class="brow"><div class="lab">Buffer</div><div class="track"><i style="width:8%;background:var(--vi)"></i></div><div class="ms">~50–100</div></div>
+    </div>
+    <p class="note">Endpoint wait + the two autoregressive stages dominate. The phrase-memory hit path skips NMT entirely. Throughput (RTF) and latency are reported separately, as p50 / p95 / p99 — profiled on real QCS8550 hardware.</p>
+  </section>
+
+  <!-- 13 DATASET / EVAL -->
+  <section class="slide" data-sec="Proof">
+    <div class="eyebrow"><span class="idx">12</span><span class="bar"></span>Proving it works</div>
+    <div class="grid2">
+      <div>
+        <h2>A test set built for the<br>failure modes that matter.</h2>
+        <p class="lead sub" style="margin-top:14px">Public corpora cover generic speech; a purpose-built bilingual set covers what they can't — measured in real factory noise.</p>
+        <p class="note">VIVOS · Common Voice · FLEURS · AISHELL-1/3/4 · KeSpeech · MUSAN / DEMAND / NOISEX-92 (factory noise) for augmentation.</p>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="k">Domain set</div><h3>Five targeted slices</h3><p>Safety commands · glossary · tone minimal-pairs · code-switch · fuzzy-match negatives.</p></div>
+        <div class="card"><div class="k">Metrics</div><h3>Beyond accuracy</h3><p>CER &amp; tone-confusion · terminology accuracy · p95 latency · and a zero-tolerance safety gate.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 PRIVACY -->
+  <section class="slide" data-sec="Privacy">
+    <div class="eyebrow"><span class="idx">13</span><span class="bar"></span>Private by default — without a dead end</div>
+    <div class="spread">
+      <h2>Offline inference and a path<br>to keep improving.</h2>
+      <p class="lead sub" style="margin:16px 0 4px">The guarantee covers inference: nothing leaves the device in use. Improvement runs on separately-governed, consented data — so “fully offline” and “gets better” don't contradict.</p>
+      <div class="cards" style="grid-template-columns:repeat(3,1fr);margin-top:16px">
+        <div class="card"><div class="k">One-way</div><h3>Config push only</h3><p>Glossary &amp; phrase packs flow to the device; inference data never flows back.</p></div>
+        <div class="card"><div class="k">Opt-in</div><h3>On-prem / federated</h3><p>Raw speech stays on factory infrastructure; only model updates move.</p></div>
+        <div class="card"><div class="k">Compliant</div><h3>PDPD · PIPL aware</h3><p>Consent, purpose limitation, anonymized speakers by design.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 SCALE -->
+  <section class="slide" data-sec="Scale">
+    <div class="eyebrow"><span class="idx">14</span><span class="bar"></span>Beyond the pair</div>
+    <div class="spread">
+      <h2>One platform, many floors<br>and many languages.</h2>
+      <div class="flow-list" style="margin-top:18px">
+        <div class="fl"><div class="n">→</div><div class="b"><h3>Many-to-many translation</h3><p>A single multilingual model replaces per-direction pairs as languages grow — English and Korean next.</p></div></div>
+        <div class="fl"><div class="n">→</div><div class="b"><h3>Per-factory knowledge packs</h3><p>Glossary and phrase memory as versioned config, updated over the air without retraining.</p></div></div>
+        <div class="fl"><div class="n">→</div><div class="b"><h3>Hardware tiers &amp; new senses</h3><p>Snapdragon SKUs from wearable to gateway; OCR- and camera-assisted context ahead.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 CLOSE -->
+  <section class="slide close" data-sec="Vân Ngữ">
+    <div class="eyebrow"><span class="idx">15</span><span class="bar"></span>The vision</div>
+    <h2>Give every worker a voice the<br>whole floor can understand.</h2>
+    <div class="mean cjk">雲語 — 把语言的云，留在地面上 · a cloud of language, kept on the ground</div>
+    <div class="wave" id="closewave" aria-hidden="true" style="margin-bottom:24px"></div>
+    <a class="repo" href="https://github.com/PhuongAnh2212/OneVoice_AIChallenge" target="_blank" rel="noopener">github.com/PhuongAnh2212/OneVoice_AIChallenge</a>
+  </section>
+
+</div>
+
+<!-- chrome -->
+<div id="dots" role="tablist" aria-label="Slides"></div>
+<div id="hint">→ &nbsp; or space to advance</div>
+<div id="rail">
+  <span class="brand"><b>Vân Ngữ</b> · OneVoice AI Challenge</span>
+  <span id="progress"><i></i></span>
+  <span id="count"><b id="cur">1</b> / <span id="tot">16</span></span>
+</div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var dotsWrap=document.getElementById('dots');
+  var bar=document.querySelector('#progress > i');
+  var curEl=document.getElementById('cur'), totEl=document.getElementById('tot');
+  var hint=document.getElementById('hint');
+  var i=0, n=slides.length;
+  totEl.textContent=n;
+
+  // build waveforms
+  function wave(el,count){ if(!el)return; var h=document.createDocumentFragment();
+    for(var k=0;k<count;k++){var b=document.createElement('i');
+      var hh=10+Math.round(38*Math.abs(Math.sin(k*0.7))*(0.5+Math.random()*0.6));
+      b.style.setProperty('--h',hh+'px'); b.style.animationDelay=(k*0.05)+'s'; h.appendChild(b);} el.appendChild(h);}
+  wave(document.getElementById('coverwave'),64);
+  wave(document.getElementById('closewave'),48);
+
+  // dots
+  slides.forEach(function(s,k){ var b=document.createElement('button');
+    b.setAttribute('role','tab'); b.setAttribute('aria-label',(s.dataset.sec||('Slide '+(k+1))));
+    b.addEventListener('click',function(){go(k)}); dotsWrap.appendChild(b);});
+  var dots=[].slice.call(dotsWrap.children);
+
+  var demoTimers=[];
+  function runDemo(active){
+    var slide=document.getElementById('demoSlide');
+    var steps=[].slice.call(slide.querySelectorAll('[data-step]'));
+    demoTimers.forEach(clearTimeout); demoTimers=[];
+    steps.forEach(function(s){s.classList.remove('show')});
+    if(!active) return;
+    var reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+    if(reduce){ steps.forEach(function(s){s.classList.add('show')}); return; }
+    steps.forEach(function(s,idx){ demoTimers.push(setTimeout(function(){s.classList.add('show')}, 350+idx*900)); });
+  }
+
+  function go(k){
+    k=Math.max(0,Math.min(n-1,k));
+    slides[i].classList.remove('is-active');
+    slides[i].classList.toggle('is-past',i<k);
+    i=k;
+    slides[i].classList.add('is-active'); slides[i].classList.remove('is-past');
+    dots.forEach(function(d,di){d.classList.toggle('on',di===i)});
+    bar.style.width=((i)/(n-1)*100)+'%';
+    curEl.textContent=i+1;
+    if(i>0) hint.classList.add('hide'); else hint.classList.remove('hide');
+    runDemo(slides[i].id==='demoSlide');
+  }
+
+  function next(){go(i+1)} function prev(){go(i-1)}
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();next();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prev();}
+    else if(e.key==='Home'){go(0)} else if(e.key==='End'){go(n-1)}
+  });
+  // click zones
+  document.getElementById('deck').addEventListener('click',function(e){
+    if(e.target.closest('a')||e.target.closest('button'))return;
+    var x=e.clientX/window.innerWidth; if(x>0.62)next(); else if(x<0.38)prev();
+  });
+  // swipe
+  var sx=0;
+  document.addEventListener('touchstart',function(e){sx=e.touches[0].clientX},{passive:true});
+  document.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-sx;
+    if(Math.abs(dx)>50){dx<0?next():prev()}},{passive:true});
+
+  go(0);
+})();
+</script>
+</body>
+</html>

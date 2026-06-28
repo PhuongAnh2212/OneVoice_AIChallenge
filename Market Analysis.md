@@ -25,8 +25,7 @@ Vân Ngữ addresses this by providing an **on-device Chinese ↔ Vietnamese ind
 
 ### 2.1 Industry Distribution
 
-![Chinese manufacturing facilities by category](market_category_distribution.png)
-
+![Chinese manufacturing facilities by industry](reports/chinese_manufacturers_vietnam_map_dataset.xlsx)
 | Category                 |   Factory Count | Investment USD (known)   |
 |:-------------------------|----------------:|:-------------------------|
 | Metals & materials       |              10 | $352,880,000             |
@@ -48,7 +47,7 @@ Vân Ngữ addresses this by providing an **on-device Chinese ↔ Vietnamese ind
 
 ### 2.2 Geographic Distribution
 
-![Chinese manufacturing facilities by province](market_geography_distribution.png)
+![Chinese manufacturing facilities by province](reports/chinese_manufacturers_vietnam_map_dataset.png)
 
 | Province                    |   Factory Count |
 |:----------------------------|----------------:|
@@ -70,7 +69,7 @@ Vân Ngữ addresses this by providing an **on-device Chinese ↔ Vietnamese ind
 
 The project also includes an interactive HTML map showing factory locations, names, categories, and coordinates.
 
-[Open the interactive geography map](chinese_manufacturers_vietnam_interactive_map.html)
+[Open the interactive geography map](reports/chinese_manufacturers_vietnam_interactive_map.html)
 
 For Markdown viewers that support raw HTML, the map can be embedded below:
 
