@@ -1,259 +1,85 @@
-# OneVoice_AIChallenge: Vân Ngữ
+# Vân Ngữ: An Edge AI Communication Platform for Industrial Workplaces
 
-### Offline Vietnamese ↔ Mandarin Edge AI Translator for Industrial Workplaces
+## Executive Summary
 
-## Overview
+Vân Ngữ is an offline Edge AI communication platform that enables seamless Vietnamese–Mandarin conversations in industrial environments. The system performs Automatic Speech Recognition (ASR), Neural Machine Translation (NMT), and Text-to-Speech (TTS) entirely on-device using Qualcomm AI Hub optimized models, eliminating cloud dependency while ensuring low latency, privacy, and reliable operation.
 
-OneVoice Factory is an Edge AI-powered multilingual communication device designed to bridge language barriers between Vietnamese workers and Mandarin-speaking supervisors in factories, warehouses, logistics hubs, and construction sites.
-
-Unlike cloud-based translation applications, OneVoice Factory performs all speech recognition, translation, and speech synthesis directly on-device, enabling reliable operation in environments with limited or unstable Internet connectivity.
-
-The project is developed as a submission for the OneVoice AI Challenge 2026 organized by Saigon AI Hub and Qualcomm.
+Unlike conventional translation applications, Vân Ngữ is designed specifically for manufacturing, logistics, and construction industries where communication errors can directly impact productivity and workplace safety. The platform incorporates an industrial knowledge layer that recognizes domain-specific terminology, safety instructions, machine names, and operational procedures to provide context-aware translations rather than literal word-for-word outputs.
 
 ---
 
-## Problem Statement
+# Problem Statement
 
-Many manufacturing facilities in Vietnam employ Chinese-speaking managers while the workforce primarily communicates in Vietnamese.
+Vietnam has become a major manufacturing hub, attracting multinational companies and foreign direct investment, particularly from Chinese enterprises. In many factories and logistics centers, Vietnamese operators and Mandarin-speaking supervisors collaborate daily despite significant language barriers.
 
-Common communication challenges include:
+Current communication methods often rely on smartphone translation applications, interpreters, or gestures. These approaches introduce several operational challenges:
 
-* Language barriers during daily operations
-* Delays in task execution due to translation needs
-* Safety risks caused by misunderstood instructions
-* Poor Internet connectivity in industrial environments
-* Hands-busy workflows where smartphones are impractical
+* Dependence on stable Internet connectivity.
+* High translation latency.
+* Generic translations that fail to understand industrial terminology.
+* Increased risk of communication errors during safety-critical operations.
+* Workflow interruptions caused by switching between manual tasks and mobile devices.
 
-OneVoice Factory aims to provide real-time bilingual communication with minimal latency while remaining fully offline.
-
----
-
-## Key Features
-
-### Real-Time Speech Translation
-
-* Vietnamese → Mandarin Chinese
-* Mandarin Chinese → Vietnamese
-
-### Fully Offline
-
-* No cloud dependency
-* No Internet connection required
-* All AI models run locally on-device
-
-### Industrial Vocabulary Optimization
-
-Built-in domain glossary for:
-
-* Manufacturing
-* Logistics
-* Warehousing
-* Construction
-* Workplace safety
-
-### Low Latency Pipeline
-
-Target performance:
-
-| Metric                 | Target      |
-| ---------------------- | ----------- |
-| Real-Time Factor (RTF) | < 1.0       |
-| Translation Latency    | < 2 seconds |
-| Offline Operation      | 100%        |
-| Device Dependency      | Edge Only   |
-
-### Portable Form Factor
-
-Supports:
-
-* Handheld device
-* Wearable badge
-* Earbud integration
-* Embedded industrial hardware
+These limitations demonstrate the need for a portable, offline, and context-aware communication system tailored for industrial workplaces.
 
 ---
 
-## System Architecture
+# Proposed Solution
 
-```text
-Microphone
-    │
-    ▼
-Voice Activity Detection
-    │
-    ▼
-Automatic Speech Recognition
-(Vietnamese / Mandarin)
-    │
-    ▼
-Translation Engine
-    │
-    ▼
-Domain Glossary Correction
-    │
-    ▼
-Text-To-Speech
-    │
-    ▼
-Speaker / Earbud
-```
+Vân Ngữ is a portable Edge AI communication platform that enables real-time bilingual communication through a simple push-to-talk interface.
+
+The complete speech processing pipeline—including speech recognition, translation, and speech synthesis—runs locally on Snapdragon-powered devices using Qualcomm AI Hub optimized models. By eliminating cloud dependency, the system maintains low latency while protecting user privacy and ensuring uninterrupted operation in environments with unreliable network connectivity.
+
+To improve translation quality, Vân Ngữ introduces an Industrial Knowledge Layer that maintains a local database of workplace terminology, safety instructions, machine names, and company-specific vocabulary. This allows translations to preserve operational meaning instead of producing generic responses.
 
 ---
 
-## Technical Stack
+# Real-World Use Case
 
-### Speech Recognition (ASR)
+### Manufacturing Production Line
 
-Options:
+A Mandarin-speaking production supervisor is inspecting Assembly Line 3 in a Vietnamese manufacturing plant.
 
-* Faster-Whisper
-* Distil-Whisper
-* Whisper Small (Quantized)
+The supervisor notices an issue with the hydraulic press and instructs the operator:
 
-### Translation Engine
+> "请立即检查三号液压机。"
 
-Options:
+The worker, wearing a Bluetooth or bone-conduction headset connected to a Snapdragon-powered device, receives the translated instruction instantly:
 
-* NLLB Distilled
-* MarianMT
-* Quantized Qwen
-* Quantized Gemma
+> "Vui lòng kiểm tra ngay máy ép thủy lực số 3."
 
-### Text-To-Speech (TTS)
+After inspection, the worker responds:
 
-Options:
+> "Máy ép đang bị kẹt và cần dừng dây chuyền."
 
-* Piper TTS
-* Kokoro TTS
-* Edge-compatible Vietnamese and Mandarin TTS models
+The device immediately translates the response into Mandarin and delivers synthesized speech back to the supervisor:
 
-### Runtime
+> "液压机卡住了，需要暂停生产线。"
 
-* Python
-* ONNX Runtime
-* Qualcomm AI Engine
-* Qualcomm AI Hub Optimized Models
-
-### Hardware
-
-Prototype:
-
-* Raspberry Pi 5
-* USB Microphone
-* Portable Speaker
-
-Production Target:
-
-* Qualcomm RB3 Gen 2
-* Qualcomm QCS6490
-* Snapdragon Edge AI Platforms
+The entire conversation occurs locally on the device without Internet connectivity, enabling uninterrupted communication in noisy industrial environments while preserving sensitive operational information.
 
 ---
 
-## Example Workflow
+# Technical Design Philosophy
 
-### Mandarin → Vietnamese
+Vân Ngữ is designed as an Edge AI communication platform that performs Automatic Speech Recognition (ASR), Neural Machine Translation (NMT), and Text-to-Speech (TTS) entirely on-device, eliminating the need for cloud connectivity while delivering real-time, privacy-preserving communication.
 
-Input:
+The system targets Snapdragon-powered devices and leverages Qualcomm AI Hub optimized models to maximize inference performance, reduce latency, and improve power efficiency. A lightweight Industrial Knowledge Layer provides context-aware translation for manufacturing, logistics, and construction environments by recognizing workplace terminology, safety instructions, and company-specific vocabulary.
 
-```text
-请检查三号生产线
-```
-
-Output:
-
-```text
-Vui lòng kiểm tra dây chuyền sản xuất số 3.
-```
+To support hands-busy industrial workflows, Vân Ngữ adopts a user-centered design featuring a push-to-talk interface, beamforming microphone, and Bluetooth or bone-conduction headset, enabling workers to communicate naturally with minimal training.
 
 ---
 
-### Vietnamese → Mandarin
+# Expected Impact
 
-Input:
+Vân Ngữ aims to improve multilingual communication in industrial workplaces by reducing language barriers between local workers and foreign supervisors.
 
-```text
-Máy ép đang bị kẹt.
-```
+The proposed platform is expected to:
 
-Output:
+* Improve communication accuracy during daily operations.
+* Reduce misunderstandings involving technical instructions and safety procedures.
+* Increase productivity by minimizing communication delays.
+* Enable reliable offline communication in low-connectivity environments.
+* Protect organizational data through fully on-device AI inference.
 
-```text
-压机卡住了。
-```
-
----
-
-## Project Structure
-
-```text
-onevoice-factory/
-│
-├── app/
-│   ├── asr/
-│   ├── translator/
-│   ├── glossary/
-│   ├── tts/
-│   └── ui/
-│
-├── models/
-│   ├── asr/
-│   ├── translation/
-│   └── tts/
-│
-├── data/
-│   └── terminology/
-│
-├── docs/
-│   ├── architecture/
-│   ├── benchmark/
-│   └── challenge_submission/
-│
-├── tests/
-│
-├── requirements.txt
-└── README.md
-```
-
----
-
-## Future Enhancements
-
-* Speaker diarization
-* Multi-person conversations
-* Camera-assisted translation
-* OCR for industrial signs
-* Safety incident reporting
-* Additional language support:
-
-  * Korean
-  * English
-  * Japanese
-
----
-
-## Business Applications
-
-### Manufacturing
-
-Communication between workers and supervisors.
-
-### Logistics
-
-Cross-border warehouse operations.
-
-### Construction
-
-Multilingual project coordination.
-
-### Industrial Safety
-
-Rapid delivery of emergency instructions.
-
----
-
-## Team
-
-Built for the OneVoice AI Challenge 2026.
-
-Empowering communication without connectivity.
+Beyond manufacturing, the same architecture can be deployed across logistics, construction, healthcare, hospitality, and other multilingual service industries, providing a scalable foundation for practical Edge AI communication solutions.
