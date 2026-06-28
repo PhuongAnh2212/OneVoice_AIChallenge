@@ -1,270 +1,246 @@
-# Market Analysis Report
-
+# Market Analysis Report  
 ## Chinese Manufacturing Presence in Vietnam & Opportunity for On-Device Chinese–Vietnamese Voice AI
 
-**Project:** Vân Ngữ – On-device Industrial Speech Translation
-**Purpose:** Voice AI Challenge – Market Validation
+**Project:** Vân Ngữ – On-device Industrial Speech Translation  
+**Purpose:** Voice AI Challenge – Market Validation  
+**Dataset:** First-pass public-source dataset of Chinese or China-linked manufacturing facilities in Vietnam  
+**Dataset size:** **41 manufacturing facilities**  
 **Date:** June 2026
 
 ---
 
-# Executive Summary
+## 1. Executive Summary
 
-Vietnam has emerged as one of the fastest-growing manufacturing destinations in Southeast Asia as multinational companies diversify production through the **China+1** strategy. Chinese manufacturers are expanding rapidly into Vietnam, particularly within electronics, machinery, automotive components, textiles, and renewable energy industries.
+Vietnam is becoming a key manufacturing base for Chinese and China-linked companies as supply chains diversify through the **China+1** strategy. To validate the market need for Vân Ngữ, we compiled a first-pass dataset of **41 Chinese manufacturing facilities** from public investment articles, industrial park tenant lists, company announcements, and Google Maps references.
 
-To understand the communication challenges created by this industrial growth, we compiled a dataset of **41 Chinese manufacturing facilities** operating across Vietnam using publicly available investment records, industrial park directories, company announcements, and Google Maps.
+The dataset shows that Chinese manufacturing activity is concentrated in industrial provinces such as **Tiền Giang, Bắc Ninh, Nghệ An, Đồng Nai, Bình Dương, Thái Bình, Phú Thọ, and Bà Rịa–Vũng Tàu**. These facilities span sectors including **electronics, metals, textiles, solar/PV, packaging, machinery, plastics, furniture, automotive/EV, and consumer goods**.
 
-Our analysis reveals several key findings:
+This market pattern creates a practical communication problem: Chinese-speaking managers, engineers, and technicians must coordinate daily with Vietnamese factory workers, operators, and quality-control teams. Existing tools are usually cloud-dependent, general-purpose, and not optimized for noisy factories or technical manufacturing vocabulary.
 
-* Chinese manufacturers are concentrated in northern and southern industrial clusters.
-* Electronics manufacturing represents the largest industry segment.
-* Daily collaboration between Chinese-speaking engineers and Vietnamese workers creates a growing demand for accurate bilingual communication.
-* Existing translation tools remain cloud-dependent and are not optimized for industrial terminology or noisy factory environments.
-
-These findings motivate the development of **Vân Ngữ**, an Edge AI communication platform capable of performing **Chinese ↔ Vietnamese** speech recognition, translation, and speech synthesis entirely on-device.
+Vân Ngữ addresses this by providing an **on-device Chinese ↔ Vietnamese industrial speech translation system** optimized for privacy, low latency, and manufacturing-specific terminology.
 
 ---
 
-# Background
+## 2. Market Picture
 
-Vietnam has become one of the world's largest destinations for manufacturing investment due to:
+### 2.1 Industry Distribution
 
-* Competitive labor costs
-* Strong export infrastructure
-* Numerous free trade agreements
-* Geographic proximity to China
-* Global supply chain diversification (China+1)
+![Chinese manufacturing facilities by category](market_category_distribution.png)
 
-According to Vietnam Briefing, China invested approximately **US$4.73 billion** into Vietnam in 2024, bringing cumulative investment since 1988 to over **US$30 billion**.
+| Category                 |   Factory Count | Investment USD (known)   |
+|:-------------------------|----------------:|:-------------------------|
+| Metals & materials       |              10 | $352,880,000             |
+| Electronics & components |               6 | $1,712,800,000           |
+| Textiles & garments      |               4 | $96,000,000              |
+| Packaging                |               4 | $16,660,000              |
+| Solar / PV               |               3 | $1,121,000,000           |
+| Food & agriculture       |               3 | $16,000,000              |
+| Machinery & motors       |               3 | $12,500,000              |
+| Display & electronics    |               2 | $275,000,000             |
+| Plastics & rubber        |               2 | $6,000,000               |
+| Furniture & home goods   |               2 | $32,000,000              |
+| Automotive / EV          |               1 | $800,000,000             |
+| Bags & consumer goods    |               1 | $1,000,000               |
 
-As Chinese investment continues to increase, communication between Chinese technical staff and Vietnamese workers has become an operational challenge throughout the manufacturing sector.
-
----
-
-# Dataset Collection
-
-To evaluate the scale of this opportunity, a manufacturing dataset was manually compiled from public sources including:
-
-* Vietnam Briefing
-* Industrial Park Tenant Directories
-* Company announcements
-* Public investment reports
-* Google Maps
-* Official company websites
-
-Each record contains:
-
-* Factory name
-* Province
-* Industrial park
-* Manufacturing category
-* Geographic coordinates
-* Public source
-
-Dataset Size:
-
-* **41 manufacturing facilities**
-* **8 manufacturing sectors**
-* **10+ industrial provinces**
+**Key insight:** The dataset is diversified, but two segments stand out for the initial Voice AI use case: **electronics/components** and **metals/materials**. Electronics is especially suitable for the MVP because it has repetitive shop-floor commands, standardized production workflows, and dense technical vocabulary such as PCB, SMT, AOI, ESD, reflow oven, and solder-joint defects.
 
 ---
 
-# Geographic Distribution
+### 2.2 Geographic Distribution
 
-The dataset demonstrates strong geographic clustering.
+![Chinese manufacturing facilities by province](market_geography_distribution.png)
 
-Major manufacturing provinces include:
+| Province                    |   Factory Count |
+|:----------------------------|----------------:|
+| Tien Giang                  |              29 |
+| Bac Ninh (former Bac Giang) |               3 |
+| Bac Ninh                    |               2 |
+| Nghe An                     |               2 |
+| Ba Ria - Vung Tau           |               1 |
+| Phu Tho                     |               1 |
+| Dong Nai                    |               1 |
+| Thai Binh                   |               1 |
+| Binh Duong                  |               1 |
 
-* Bắc Ninh
-* Bắc Giang
-* Hải Phòng
-* Hải Dương
-* Hưng Yên
-* Bình Dương
-* Đồng Nai
-* Long An
-
-These provinces represent Vietnam's primary industrial corridors where Chinese and Vietnamese personnel work together daily.
-
----
-
-# Industry Distribution
-
-The collected dataset covers multiple manufacturing sectors.
-
-| Industry              | Approximate Facilities |
-| --------------------- | ---------------------- |
-| Electronics           | 10                     |
-| Textile & Garments    | 8                      |
-| Machinery             | 6                      |
-| Automotive Components | 5                      |
-| Plastics              | 4                      |
-| Furniture             | 3                      |
-| Renewable Energy      | 3                      |
-| Others                | 2                      |
-
-Electronics manufacturing represents the largest segment and is therefore selected as the initial target industry for Vân Ngữ.
+**Key insight:** The strongest concentration in this dataset comes from **Tiền Giang**, mainly because Long Jiang Industrial Park has a publicly listed set of Chinese-invested factory tenants. Northern electronics clusters such as **Bắc Ninh / former Bắc Giang** also appear strongly in news-based investment records.
 
 ---
 
-# Why Electronics?
+## 3. Interactive Geography Map
 
-Electronics manufacturing offers the highest potential impact because:
+The project also includes an interactive HTML map showing factory locations, names, categories, and coordinates.
 
-* Large Chinese investment footprint
-* Highly standardized workflows
-* Repetitive technical instructions
-* Safety-critical communication
-* Extensive use of specialized terminology
-* Frequent interaction between Chinese engineers and Vietnamese operators
+[Open the interactive geography map](chinese_manufacturers_vietnam_interactive_map.html)
 
-Unlike casual conversations, factory communication relies on precise terminology that generic translation systems often mistranslate.
+For Markdown viewers that support raw HTML, the map can be embedded below:
 
-Example terms include:
+<iframe src="chinese_manufacturers_vietnam_interactive_map.html" width="100%" height="600" style="border:1px solid #ddd; border-radius:8px;" title="Chinese manufacturing facilities in Vietnam map"></iframe>
 
-* PCB
-* SMT
-* AOI
-* Reflow Oven
-* Cold Solder Joint
-* ESD
-* Conveyor
-* Calibration
-* Pick-and-Place Machine
+> Note: Coordinates are approximate where exact factory pins were not publicly available. Many entries use industrial-park or province-level coordinates.
 
 ---
 
-# Market Pain Points
+## 4. Dataset Snapshot
 
-Current communication methods include:
-
-* Human interpreters
-* Messaging applications
-* Cloud-based translation tools
-
-These approaches introduce several operational challenges.
-
-## Language Barrier
-
-Many Chinese managers have limited Vietnamese proficiency, while Vietnamese operators may not understand technical Chinese instructions.
-
-## Cloud Dependency
-
-Most translation systems require internet connectivity, making them unsuitable for factories with restricted or unreliable networks.
-
-## Industrial Noise
-
-Factory environments contain continuous machine noise that significantly reduces speech recognition accuracy.
-
-## Technical Vocabulary
-
-Generic translation models are not optimized for manufacturing terminology, leading to incorrect translations of production instructions.
-
-## Data Privacy
-
-Production discussions often contain confidential manufacturing information that should remain within the factory.
+| Company / Factory                                       | Parent / Group                                  | Category                 | Province                    | Industrial Zone / Location                                 | Investment USD   | Source URL                                                                                                                                                                                                                                                                                                                                                                           |
+|:--------------------------------------------------------|:------------------------------------------------|:-------------------------|:----------------------------|:-----------------------------------------------------------|:-----------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Luxshare-ICT (Vietnam) Ltd                              | Luxshare Precision / Luxshare-ICT               | Electronics & components | Bac Ninh (former Bac Giang) | Van Trung / Quang Chau Industrial Parks                    | $600,000,000     | https://theinvestor.vn/vietnam-the-most-important-manufacturing-hub-of-chinese-electronics-giant-luxshare-ict-exec-d17625.html                                                                                                                                                                                                                                                       |
+| Goertek Technology Vina                                 | Goertek Inc.                                    | Electronics & components | Bac Ninh                    | Nam Son-Hap Linh / Que Vo Industrial Parks                 | $280,000,000     | https://theinvestor.vn/china-electronics-giant-goertek-to-invest-280-mln-in-vietnams-bac-ninh-province-d8240.html                                                                                                                                                                                                                                                                    |
+| BOE Vision - Electronic Technology (Vietnam)            | BOE Technology Group                            | Display & electronics    | Ba Ria - Vung Tau           | Phu My 3 Specialized Industrial Park                       | $275,000,000     | https://vir.com.vn/chinas-boe-builds-275-million-electronics-factory-in-ba-ria-vung-tau-110565.html                                                                                                                                                                                                                                                                                  |
+| BOE Vision - Electronic Technology (Vietnam) - Dong Nai | BOE Technology Group                            | Display & electronics    | Dong Nai                    | Nhon Trach II Industrial Park                              |                  | https://www.emis.com/php/company-profile/VN/Boe_Vision_-_Electronic_Technology__Viet_Nam__Company_Limited__C%C3%B4ng_Ty_Tnhh_C%C3%B4ng_Ngh%E1%BB%87_%C4%90i%E1%BB%87n_T%E1%BB%AD_-_Nghe_Nh%C3%ACn_Boe___C%C3%B4ng_Ty_Tnhh_C%C3%B4ng_Ngh%E1%BB%87_%C4%90i%E1%BB%87n_T%E1%BB%AD_-_Nghe_Nh%C3%ACn_Boe__Boe_Vision_-_Electronic_Technology__Viet_Nam__Company_Limited___en_16493199.html |
+| BYD Electronics (Vietnam) Co., Ltd                      | BYD Group                                       | Electronics & components | Phu Tho                     | Phu Ha Industrial Park                                     | $366,000,000     | https://theinvestor.vn/chinas-electronics-giant-byd-plans-expansion-at-northern-vietnam-plant-d15726.html                                                                                                                                                                                                                                                                            |
+| Chery Omoda & Jaecoo Vietnam JV                         | Chery Automobile / Geleximco JV                 | Automotive / EV          | Thai Binh                   | Hung Phu Industrial Park (reported province-level project) | $800,000,000     | https://www.reuters.com/business/autos-transportation/chinas-chery-set-up-800-mln-automobile-factory-vietnam-2024-04-04/                                                                                                                                                                                                                                                             |
+| Hainan Drinda New Energy Vietnam project                | Hainan Drinda New Energy Technology             | Solar / PV               | Nghe An                     | Hoang Mai I Industrial Park area                           | $450,000,000     | https://theinvestor.vn/chinas-hainan-drinda-to-invest-450-mln-in-solar-cell-manufacturing-in-central-vietnam-d9251.html                                                                                                                                                                                                                                                              |
+| JA Solar Vietnam                                        | JA Solar                                        | Solar / PV               | Bac Ninh (former Bac Giang) | Quang Chau / Viet Han Industrial Parks                     | $378,000,000     | https://theinvestor.vn/northern-vietnam-province-fines-chinas-ja-solar-for-illegal-construction-d10062.html                                                                                                                                                                                                                                                                          |
+| Runergy PV Technology (Vietnam)                         | Jiangsu Runergy New Energy Technology affiliate | Solar / PV               | Nghe An                     | Hoang Mai / industrial zone area                           | $293,000,000     | https://vir.com.vn/runergy-pumps-293-million-into-silicon-and-semiconductor-plant-103539.html                                                                                                                                                                                                                                                                                        |
+| Foxconn / Shunsin Vietnam proposed plant                | Foxconn subsidiary Shunsin                      | Electronics & components | Bac Ninh (former Bac Giang) | Bac Giang area                                             | $80,000,000      | https://www.reuters.com/technology/foxconn-subsidiary-shunsin-eyes-80-mln-vietnam-investment-integrated-circuits-2024-11-04/                                                                                                                                                                                                                                                         |
+| Foxconn Singapore PCB plant                             | Foxconn / Hon Hai                               | Electronics & components | Bac Ninh                    | Bac Ninh province                                          | $383,000,000     | https://www.reuters.com/technology/foxconn-invest-383-mln-vietnam-circuit-board-plant-says-state-media-2024-06-24/                                                                                                                                                                                                                                                                   |
+| Shenzhou International Vietnam operations               | Shenzhou International                          | Textiles & garments      | Binh Duong                  | Binh Duong industrial cluster                              |                  | https://www.vietnam-briefing.com/news/china-manufacturing-presence-vietnam-locations-future-growth.html/                                                                                                                                                                                                                                                                             |
 
 ---
 
-# Opportunity for Edge AI
+## 5. Problem Statement
 
-An ideal industrial communication platform should:
+Vietnam’s manufacturing growth is creating a new bilingual communication challenge. Chinese-invested factories increasingly require daily coordination between Chinese-speaking technical staff and Vietnamese workers. This communication is often operationally sensitive and time-critical, especially during production setup, quality inspection, machine operation, and safety incidents.
 
-* Operate completely offline
-* Perform speech recognition locally
-* Translate with very low latency
-* Preserve confidential information
-* Understand manufacturing terminology
-* Function under noisy industrial conditions
+However, communication inside factories still depends heavily on human interpreters, messaging apps, or cloud-based translation services. These solutions create five major problems:
 
-These requirements align closely with Qualcomm's Edge AI platform.
+1. **Latency:** Workers may need to wait for interpreters or repeated clarification.
+2. **Accuracy:** Generic translators often mistranslate technical factory terms.
+3. **Noise:** Factory background noise reduces speech-recognition quality.
+4. **Connectivity:** Internet access may be unreliable or restricted inside production zones.
+5. **Privacy:** Production instructions and factory operations may contain confidential business information.
+
+This makes general-purpose translation insufficient for industrial environments. A useful solution must work offline, run locally, support Chinese ↔ Vietnamese speech, and preserve domain-specific manufacturing terminology.
 
 ---
 
-# Proposed Solution
+## 6. Chosen Glossary Scope: Electronics Manufacturing
 
-Vân Ngữ is an end-to-end Edge AI communication platform designed specifically for industrial environments.
+For the Voice AI Challenge MVP, the recommended glossary is **Electronics Manufacturing**.
 
-Pipeline:
+### Why Electronics?
 
+- Strong Chinese manufacturing presence in Vietnam.
+- High frequency of Chinese–Vietnamese coordination on production lines.
+- Repetitive and structured speech commands.
+- Domain-specific terms that generic translators often mishandle.
+- Clear demo scenarios for ASR → glossary correction → translation → TTS.
+
+### Example Glossary Terms
+
+| Term | Meaning / Use Case |
+|---|---|
+| PCB | Printed circuit board used in electronics assembly |
+| SMT | Surface-mount technology production process |
+| AOI | Automated optical inspection |
+| SPI | Solder paste inspection |
+| ESD | Electrostatic discharge protection |
+| Reflow oven | Machine used to melt solder in SMT process |
+| Cold solder joint | Defective solder joint caused by insufficient heat |
+| NG | “No good”; failed inspection result |
+| Calibration | Machine or sensor adjustment process |
+| Conveyor | Production-line movement system |
+
+### Example Translation Scenario
+
+**Chinese input:**  
+请检查三号线的PCB有没有虚焊。
+
+**Generic translation risk:**  
+Please check whether the board has false welding.
+
+**Glossary-enhanced translation:**  
+Please inspect the PCB on Line 3 for cold solder joints.
+
+**Vietnamese target:**  
+Vui lòng kiểm tra PCB ở chuyền số 3 xem có lỗi hàn nguội không.
+
+---
+
+## 7. Solution Opportunity
+
+Vân Ngữ can be positioned as an industrial Edge AI communication platform with the following pipeline:
+
+```text
 Speech Input
-
-↓
-
-Automatic Speech Recognition (ASR)
-
-↓
-
-Electronics Manufacturing Glossary
-
-↓
-
-Neural Machine Translation
-
-↓
-
+    ↓
+Noise Reduction / Voice Activity Detection
+    ↓
+Automatic Speech Recognition (Chinese or Vietnamese)
+    ↓
+Electronics Manufacturing Glossary Matcher
+    ↓
+Chinese ↔ Vietnamese Neural Machine Translation
+    ↓
 Terminology Correction
-
-↓
-
-Text-to-Speech (TTS)
-
-↓
-
+    ↓
+Text-to-Speech
+    ↓
 Speech Output
+```
 
-All AI inference executes locally on Snapdragon hardware without cloud dependency.
-
----
-
-# Competitive Advantage
-
-Unlike general-purpose translation applications, Vân Ngữ focuses specifically on industrial communication.
-
-Advantages include:
-
-* Offline operation
-* Privacy-preserving architecture
-* Low-latency translation
-* Manufacturing-specific glossary
-* Optimized for Qualcomm Edge AI
-* Chinese ↔ Vietnamese specialization
+All inference runs locally on Qualcomm Snapdragon hardware, reducing cloud dependency and improving privacy.
 
 ---
 
-# Future Expansion
+## 8. Competitive Advantage
 
-Following validation within electronics manufacturing, the glossary can be expanded into additional industries:
+Compared with general translation apps, Vân Ngữ is differentiated by:
 
-* Automotive
-* Machinery
-* Textile
-* Furniture
-* Plastic Injection
-* Renewable Energy
-* Logistics
-* Warehouse Operations
-
-Each domain can maintain its own specialized terminology database while sharing the same Edge AI pipeline.
+- **On-device inference:** No cloud connection required.
+- **Industrial specialization:** Electronics manufacturing glossary improves terminology accuracy.
+- **Low latency:** Designed for real-time shop-floor communication.
+- **Privacy preservation:** Sensitive factory conversations stay on-device.
+- **Noise-aware design:** Built for factory environments rather than quiet everyday conversation.
+- **Chinese ↔ Vietnamese focus:** Narrower language scope enables better optimization.
 
 ---
 
-# Conclusion
+## 9. Expansion Path
 
-The collected manufacturing dataset demonstrates that Chinese manufacturing has become deeply integrated into Vietnam's industrial economy. Communication between Chinese-speaking engineers and Vietnamese workers is now a daily operational necessity across dozens of manufacturing facilities.
+After validating the electronics glossary, Vân Ngữ can expand into additional manufacturing domains found in the dataset:
 
-This creates a strong market opportunity for an Edge AI-powered industrial communication platform.
+- Metals & Materials
+- Automotive / EV
+- Machinery & Motors
+- Textiles & Garments
+- Plastics & Rubber
+- Solar / PV
+- Furniture & Home Goods
+- Packaging
 
-By combining on-device speech recognition, neural machine translation, text-to-speech, and an electronics manufacturing glossary, **Vân Ngữ** enables secure, low-latency, and domain-aware Chinese–Vietnamese communication without relying on cloud infrastructure.
+Each industry can maintain a separate terminology glossary while sharing the same on-device AI pipeline.
 
 ---
 
-# References
+## 10. References and Source Links
 
-1. Vietnam Briefing. *China's Manufacturing Presence in Vietnam: Locations and Future Growth.* https://www.vietnam-briefing.com/news/china-manufacturing-presence-vietnam-locations-future-growth.html
+The dataset was compiled from public sources, including the following representative URLs:
 
-2. B&Company. *Overview of Chinese Companies in Vietnam: Trends, Opportunities and Challenges.* https://b-company.jp/overview-of-chinese-companies-in-vietnam-trends-opportunities-and-challenges/
+- https://theinvestor.vn/vietnam-the-most-important-manufacturing-hub-of-chinese-electronics-giant-luxshare-ict-exec-d17625.html
+- https://theinvestor.vn/china-electronics-giant-goertek-to-invest-280-mln-in-vietnams-bac-ninh-province-d8240.html
+- https://vir.com.vn/chinas-boe-builds-275-million-electronics-factory-in-ba-ria-vung-tau-110565.html
+- https://www.emis.com/php/company-profile/VN/Boe_Vision_-_Electronic_Technology__Viet_Nam__Company_Limited__C%C3%B4ng_Ty_Tnhh_C%C3%B4ng_Ngh%E1%BB%87_%C4%90i%E1%BB%87n_T%E1%BB%AD_-_Nghe_Nh%C3%ACn_Boe___C%C3%B4ng_Ty_Tnhh_C%C3%B4ng_Ngh%E1%BB%87_%C4%90i%E1%BB%87n_T%E1%BB%AD_-_Nghe_Nh%C3%ACn_Boe__Boe_Vision_-_Electronic_Technology__Viet_Nam__Company_Limited___en_16493199.html
+- https://theinvestor.vn/chinas-electronics-giant-byd-plans-expansion-at-northern-vietnam-plant-d15726.html
+- https://www.reuters.com/business/autos-transportation/chinas-chery-set-up-800-mln-automobile-factory-vietnam-2024-04-04/
+- https://theinvestor.vn/chinas-hainan-drinda-to-invest-450-mln-in-solar-cell-manufacturing-in-central-vietnam-d9251.html
+- https://theinvestor.vn/northern-vietnam-province-fines-chinas-ja-solar-for-illegal-construction-d10062.html
+- https://vir.com.vn/runergy-pumps-293-million-into-silicon-and-semiconductor-plant-103539.html
+- https://www.reuters.com/technology/foxconn-subsidiary-shunsin-eyes-80-mln-vietnam-investment-integrated-circuits-2024-11-04/
+- https://www.reuters.com/technology/foxconn-invest-383-mln-vietnam-circuit-board-plant-says-state-media-2024-06-24/
+- https://www.vietnam-briefing.com/news/china-manufacturing-presence-vietnam-locations-future-growth.html/
 
-3. Ministry of Commerce of the People's Republic of China (MOFCOM). *Report on Development of Chinese Enterprises in Vietnam.*
+Additional cited source:
 
-4. Authors. *Dataset of Chinese Manufacturing Facilities in Vietnam (2026).* Compiled from public industrial park directories, company announcements, investment reports, and Google Maps.
+- Vietnam Briefing, “China's Manufacturing Presence in Vietnam: Locations and Future Growth,” 2025.  
+  https://www.vietnam-briefing.com/news/china-manufacturing-presence-vietnam-locations-future-growth.html
+
+---
+
+## 11. Attached Project Files
+
+- Dataset spreadsheet: `chinese_manufacturers_vietnam_map_dataset.xlsx`
+- Interactive geography map: `chinese_manufacturers_vietnam_interactive_map.html`
+- Category chart: `market_category_distribution.png`
+- Province chart: `market_geography_distribution.png`
