@@ -252,19 +252,6 @@ Rapid delivery of emergency instructions.
 
 ---
 
-## Competition Alignment
-
-This solution directly addresses the objectives of the OneVoice AI Challenge:
-
-* Fully offline Edge AI processing
-* Real-time multilingual communication
-* Low latency operation
-* Practical industrial deployment
-* Strong business viability
-* Portable device architecture
-
----
-
 ## Team
 
 Built for the OneVoice AI Challenge 2026.
